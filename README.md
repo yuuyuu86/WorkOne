@@ -40,7 +40,7 @@ npm run dist:dir      # 動作確認用にアプリ本体だけを高速生成
 | --- | --- |
 | サービスを追加 | Cmd/Ctrl + N |
 | 設定 | Cmd/Ctrl + , |
-| 今日 / Inbox / あとで見る | Cmd/Ctrl + 1 / 2 / 3 |
+| Home / Inbox / あとで見る | Cmd/Ctrl + 1 / 2 / 3 |
 | 再読み込み | Cmd/Ctrl + R |
 | 戻る / 進む | Cmd/Ctrl + [ / ] |
 | 次の / 前のサービス | Cmd/Ctrl + Shift + ] / [ |

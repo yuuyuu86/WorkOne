@@ -13,8 +13,28 @@ import { useAppStore } from './store/useAppStore';
 
 export default function App() {
   const activeView = useAppStore((s) => s.activeView);
+  const theme = useAppStore((s) => s.theme);
+  const sidebarAutoHide = useAppStore((s) => s.sidebarAutoHide);
   const [showAdd, setShowAdd] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+  // 自動非表示時に、左端ホバーでサイドバーを一時表示
+  const [sidebarRevealed, setSidebarRevealed] = useState(false);
+
+  // 外観テーマを <html data-theme> に反映（system は OS 設定に追従）
+  useEffect(() => {
+    const root = document.documentElement;
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const apply = () => {
+      const resolved =
+        theme === 'system' ? (mq.matches ? 'dark' : 'light') : theme;
+      root.setAttribute('data-theme', resolved);
+    };
+    apply();
+    if (theme === 'system') {
+      mq.addEventListener('change', apply);
+      return () => mq.removeEventListener('change', apply);
+    }
+  }, [theme]);
   // Cmd/Ctrl+K はメニューのアクセラレータで処理（webview にフォーカスがあっても効くため）
 
   // メニュー/キーボードショートカットのコマンドを処理
@@ -96,10 +116,23 @@ export default function App() {
   };
 
   return (
-    <div className="app">
+    <div
+      className={`app${sidebarAutoHide ? ' sidebar-autohide' : ''}${
+        sidebarAutoHide && sidebarRevealed ? ' sidebar-revealed' : ''
+      }`}
+    >
+      {sidebarAutoHide && (
+        <div
+          className="sidebar-hover-zone"
+          onMouseEnter={() => setSidebarRevealed(true)}
+        />
+      )}
       <Sidebar
         onOpenAdd={() => setShowAdd(true)}
         onOpenSearch={() => setShowSearch(true)}
+        onMouseLeave={
+          sidebarAutoHide ? () => setSidebarRevealed(false) : undefined
+        }
       />
       <div className="main">
         <UpdateBanner />

@@ -9,6 +9,7 @@ import {
 } from '../types/service';
 import { ServiceCard } from './ServiceCard';
 import { CustomServiceForm } from './CustomServiceForm';
+import { SlackWorkspaceForm } from './SlackWorkspaceForm';
 
 type Props = {
   onClose: () => void;
@@ -53,6 +54,8 @@ export function AddServiceModal({ onClose }: Props) {
               </button>
             ))}
           </div>
+
+          {tab === 'chat' && <SlackWorkspaceForm onAdded={onClose} />}
 
           {tab === 'custom' ? (
             <CustomServiceForm onAdded={onClose} />

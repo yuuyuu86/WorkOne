@@ -19,6 +19,34 @@
     'Helvetica Neue', Arial, sans-serif;
 }
 
+/* ---------- ダークモード ---------- */
+:root[data-theme='dark'] {
+  --bg: #1c1c1e;
+  --sidebar-bg: #232325;
+  --panel-bg: #2c2c2e;
+  --accent: #0a84ff;
+  --accent-soft: #16324f;
+  --text: #f5f5f7;
+  --text-secondary: #a1a1a6;
+  --text-tertiary: #8e8e93;
+  --border: #3a3a3c;
+  --border-strong: #48484a;
+  --hover: #3a3a3c;
+  --danger: #ff453a;
+  --danger-soft: #3a2422;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
+  color-scheme: dark;
+}
+
+:root[data-theme='dark'] .badge.badge-soon {
+  background: #2e2a45;
+  color: #b3a4ff;
+}
+
+:root[data-theme='dark'] .info-banner {
+  color: #8fc2ff;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -67,6 +95,53 @@ textarea {
   flex-direction: column;
   padding: 0 12px 12px;
   overflow-y: auto;
+  position: relative;
+}
+
+/* 右端の幅調整ハンドル */
+.sidebar-resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 30;
+}
+
+.sidebar-resizer:hover,
+.sidebar-resizer.active {
+  background: linear-gradient(
+    to right,
+    transparent,
+    var(--accent)
+  );
+  opacity: 0.6;
+}
+
+/* ---------- サイドバー自動非表示 ---------- */
+.sidebar-hover-zone {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 12px;
+  height: 100%;
+  z-index: 60;
+}
+
+.app.sidebar-autohide .sidebar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  z-index: 70;
+  box-shadow: 0 0 24px rgba(0, 0, 0, 0.25);
+  transform: translateX(-101%);
+  transition: transform 0.2s ease;
+}
+
+.app.sidebar-autohide.sidebar-revealed .sidebar {
+  transform: translateX(0);
 }
 
 .sidebar-header {
@@ -202,6 +277,31 @@ textarea {
   color: var(--text-tertiary);
   padding: 6px 10px 10px;
   line-height: 1.5;
+}
+
+/* カテゴリ見出し（折りたたみ可能） */
+.sidebar-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  padding: 10px 10px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  text-align: left;
+}
+
+.sidebar-group-header:hover {
+  color: var(--text-secondary);
+}
+
+.sidebar-group-header .grow {
+  flex: 1;
 }
 
 /* ---------- メイン領域 ---------- */

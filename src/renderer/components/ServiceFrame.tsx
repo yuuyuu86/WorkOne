@@ -3,6 +3,7 @@ import {
   FiArrowLeft,
   FiArrowRight,
   FiRotateCw,
+  FiHome,
   FiExternalLink,
   FiBookmark,
   FiMonitor,
@@ -12,7 +13,7 @@ import { useAppStore } from '../store/useAppStore';
 import { ServiceIcon } from './ServiceIcon';
 import { CHROME_USER_AGENT } from '../data/userAgent';
 import { SHARED_PARTITION } from '../lib/session';
-import { parseUnreadCount } from '../lib/unread';
+import { parseUnreadCount, hostnameOf } from '../lib/unread';
 import type { Service } from '../types/service';
 
 type Props = {
@@ -111,6 +112,9 @@ export function ServiceFrame({ service, isActive }: Props) {
   // メール系は「開いても既読扱いにしない」= 未読件数を常に表示する
   const isMail = service.category === 'mail';
 
+  // 未読推定のためのホスト名（サービス固有のクセ補正に使う）
+  const host = useMemo(() => hostnameOf(service.url), [service.url]);
+
   // src はマウント時の初期 URL に固定（途中で書き換えると SPA がリロードされる）
   const initialSrc = useMemo(() => {
     const state = useAppStore.getState();
@@ -148,7 +152,7 @@ export function ServiceFrame({ service, isActive }: Props) {
       }
       // Gmail はフィード側がバッジ・通知を管理するのでタイトルでは触らない
       if (isGmail) return;
-      const count = parseUnreadCount(title);
+      const count = parseUnreadCount(title, host);
       if (isMail) {
         // メール系は開いていても未読件数を出し続ける（開く=既読ではないため）
         setServiceBadge(service.id, count);
@@ -280,6 +284,7 @@ export function ServiceFrame({ service, isActive }: Props) {
     service.icon,
     isGmail,
     isMail,
+    host,
     setServiceLastUrl,
     setServiceBadge,
     addNotification,
@@ -457,6 +462,19 @@ export function ServiceFrame({ service, isActive }: Props) {
     }
   };
 
+  // サービス登録時の最初の URL に戻る（引き継いだ最後の URL を破棄）。
+  const handleHome = () => {
+    const wv = webviewRef.current;
+    setServiceLastUrl(service.id, service.url);
+    if (!wv) return;
+    try {
+      if (typeof wv.loadURL === 'function') wv.loadURL(service.url);
+      else wv.src = service.url;
+    } catch {
+      /* dom-ready 前などは無視 */
+    }
+  };
+
   const handleSaveReadLater = () => {
     addReadLater({
       title: currentTitle || service.name,
@@ -498,6 +516,13 @@ export function ServiceFrame({ service, isActive }: Props) {
           onClick={() => webviewRef.current?.reload?.()}
         >
           <FiRotateCw size={16} />
+        </button>
+        <button
+          className="icon-btn"
+          title="最初のページに戻る"
+          onClick={handleHome}
+        >
+          <FiHome size={16} />
         </button>
 
         <div className="title" style={{ marginLeft: 6 }}>

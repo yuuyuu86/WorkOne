@@ -673,7 +673,7 @@ function buildAppMenu() {
       label: '移動',
       submenu: [
         {
-          label: '今日',
+          label: 'Home',
           accelerator: 'CmdOrCtrl+1',
           click: () => send('menu:view-today'),
         },

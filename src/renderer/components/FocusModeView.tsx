@@ -17,7 +17,7 @@ const MODES: { key: FocusMode; label: string; desc: string }[] = [
   {
     key: 'deep',
     label: '完全集中モード',
-    desc: 'サービス一覧を隠し、今日・Inbox・あとで見る・設定だけを表示します。',
+    desc: 'サービス一覧を隠し、Home・Inbox・あとで見る・設定だけを表示します。',
   },
 ];
 

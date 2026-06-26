@@ -57,6 +57,16 @@ type AppState = {
   /** 天気表示の位置（未設定なら IP 自動判定）。weatherEnabled で ON/OFF */
   weatherEnabled: boolean;
   weatherLocation: { lat: number; lon: number; label: string } | null;
+  /** 外観テーマ（system はOSに追従、既定 system） */
+  theme: 'system' | 'light' | 'dark';
+  /** サイドバーの横幅（px、既定 248） */
+  sidebarWidth: number;
+  /** サイドバーを自動で隠す（左端ホバーで表示） */
+  sidebarAutoHide: boolean;
+  /** サイドバーをカテゴリ別にグループ表示する（既定 ON） */
+  sidebarGrouped: boolean;
+  /** 折りたたみ中のカテゴリ */
+  collapsedCategories: string[];
 
   // 揮発（UI ナビゲーション・未読バッジ）
   activeView: ViewKey;
@@ -76,6 +86,11 @@ type AppState = {
   setWeatherLocation: (
     loc: { lat: number; lon: number; label: string } | null
   ) => void;
+  setTheme: (theme: 'system' | 'light' | 'dark') => void;
+  setSidebarWidth: (width: number) => void;
+  setSidebarAutoHide: (enabled: boolean) => void;
+  setSidebarGrouped: (enabled: boolean) => void;
+  toggleCategoryCollapsed: (category: string) => void;
   /** 閲覧履歴を1件記録（同一 URL は最新化して先頭へ） */
   addHistory: (entry: Omit<HistoryEntry, 'id' | 'visitedAt'>) => void;
   clearHistory: () => void;
@@ -168,6 +183,11 @@ export const useAppStore = create<AppState>()(
       navTarget: null,
       weatherEnabled: true,
       weatherLocation: null,
+      theme: 'system',
+      sidebarWidth: 248,
+      sidebarAutoHide: false,
+      sidebarGrouped: true,
+      collapsedCategories: [],
 
       activeView: 'today',
       activeServiceId: null,
@@ -184,6 +204,19 @@ export const useAppStore = create<AppState>()(
       setHistoryEnabled: (enabled) => set({ historyEnabled: enabled }),
       setWeatherEnabled: (enabled) => set({ weatherEnabled: enabled }),
       setWeatherLocation: (loc) => set({ weatherLocation: loc }),
+      setTheme: (theme) => set({ theme }),
+      setSidebarWidth: (width) =>
+        set({ sidebarWidth: Math.max(180, Math.min(420, Math.round(width))) }),
+      setSidebarAutoHide: (enabled) => set({ sidebarAutoHide: enabled }),
+      setSidebarGrouped: (enabled) => set({ sidebarGrouped: enabled }),
+      toggleCategoryCollapsed: (category) => {
+        const has = get().collapsedCategories.includes(category);
+        set({
+          collapsedCategories: has
+            ? get().collapsedCategories.filter((c) => c !== category)
+            : [...get().collapsedCategories, category],
+        });
+      },
 
       addHistory: (entry) => {
         if (!get().historyEnabled) return;
@@ -472,6 +505,11 @@ export const useAppStore = create<AppState>()(
         history: state.history,
         weatherEnabled: state.weatherEnabled,
         weatherLocation: state.weatherLocation,
+        theme: state.theme,
+        sidebarWidth: state.sidebarWidth,
+        sidebarAutoHide: state.sidebarAutoHide,
+        sidebarGrouped: state.sidebarGrouped,
+        collapsedCategories: state.collapsedCategories,
         mutedServices: state.mutedServices,
         importantServices: state.importantServices,
       }),

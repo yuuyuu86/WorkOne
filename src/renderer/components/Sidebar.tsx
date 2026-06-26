@@ -1,22 +1,34 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
-  FiSun,
+  FiHome,
   FiInbox,
   FiBookmark,
   FiTarget,
   FiPlus,
   FiSettings,
   FiSearch,
+  FiChevronDown,
+  FiChevronRight,
 } from 'react-icons/fi';
 import { useAppStore, type ViewKey } from '../store/useAppStore';
+import {
+  CATEGORY_LABELS,
+  CATEGORY_ORDER,
+  type Service,
+  type ServiceCategory,
+} from '../types/service';
 import { ServiceIcon } from './ServiceIcon';
 
 type Props = {
   onOpenAdd: () => void;
   onOpenSearch: () => void;
+  /** 自動非表示のとき、サイドバーから離れたら隠す */
+  onMouseLeave?: () => void;
 };
 
-export function Sidebar({ onOpenAdd, onOpenSearch }: Props) {
+export function Sidebar({ onOpenAdd, onOpenSearch, onMouseLeave }: Props) {
+  const sidebarWidth = useAppStore((s) => s.sidebarWidth);
+  const setSidebarWidth = useAppStore((s) => s.setSidebarWidth);
   const activeView = useAppStore((s) => s.activeView);
   const activeServiceId = useAppStore((s) => s.activeServiceId);
   const services = useAppStore((s) => s.services);
@@ -27,19 +39,54 @@ export function Sidebar({ onOpenAdd, onOpenSearch }: Props) {
   const openService = useAppStore((s) => s.openService);
   const reorderServices = useAppStore((s) => s.reorderServices);
   const serviceBadges = useAppStore((s) => s.serviceBadges);
+  const sidebarGrouped = useAppStore((s) => s.sidebarGrouped);
+  const collapsedCategories = useAppStore((s) => s.collapsedCategories);
+  const toggleCategoryCollapsed = useAppStore((s) => s.toggleCategoryCollapsed);
   const unreadNotifications = useAppStore(
     (s) => s.notifications.filter((n) => !n.read).length
   );
 
-  // ドラッグ並び替え（通常モードのみ。集中モードは表示が絞られるため無効）
-  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  // ドラッグ並び替え（通常モードのみ。集中モードは表示が絞られるため無効）。
+  // id ベースで扱う（グループ表示でも崩れないように）。
+  const [dragId, setDragId] = useState<string | null>(null);
   const canReorder = focusMode === 'normal';
 
-  const handleDrop = (to: number) => {
-    if (dragIndex !== null && dragIndex !== to) {
-      reorderServices(dragIndex, to);
+  // 右端ドラッグで横幅を変更
+  const [resizing, setResizing] = useState(false);
+  const resizeRef = useRef<{ startX: number; startW: number } | null>(null);
+  useEffect(() => {
+    if (!resizing) return;
+    const onMove = (e: MouseEvent) => {
+      const s = resizeRef.current;
+      if (!s) return;
+      setSidebarWidth(s.startW + (e.clientX - s.startX));
+    };
+    const onUp = () => setResizing(false);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [resizing, setSidebarWidth]);
+
+  // ドロップ先サービスの位置へ移動。グループ表示では同カテゴリ内のみ。
+  const handleDropOn = (target: Service) => {
+    if (!dragId || dragId === target.id) {
+      setDragId(null);
+      return;
     }
-    setDragIndex(null);
+    const dragged = services.find((s) => s.id === dragId);
+    if (dragged && (!sidebarGrouped || dragged.category === target.category)) {
+      const from = services.findIndex((s) => s.id === dragId);
+      const to = services.findIndex((s) => s.id === target.id);
+      if (from >= 0 && to >= 0) reorderServices(from, to);
+    }
+    setDragId(null);
   };
 
   // 集中モードに応じて表示するサービスを絞る
@@ -49,6 +96,60 @@ export function Sidebar({ onOpenAdd, onOpenSearch }: Props) {
   } else if (focusMode === 'deep') {
     visibleServices = []; // 完全集中モードはサービス一覧を隠す
   }
+
+  // 1 サービス分のボタン
+  const serviceButton = (svc: Service) => (
+    <button
+      key={svc.id}
+      className={`nav-item ${
+        activeView === 'service' && activeServiceId === svc.id ? 'active' : ''
+      } ${dragId === svc.id ? 'dragging' : ''}`}
+      onClick={() => openService(svc.id)}
+      title={svc.name}
+      draggable={canReorder}
+      onDragStart={() => canReorder && setDragId(svc.id)}
+      onDragOver={(e) => canReorder && e.preventDefault()}
+      onDrop={() => canReorder && handleDropOn(svc)}
+      onDragEnd={() => setDragId(null)}
+    >
+      <ServiceIcon iconKey={svc.icon} chip={22} />
+      <span className="nav-label">{svc.name}</span>
+      {serviceBadges[svc.id] > 0 && (
+        <span className="unread-badge">{serviceBadges[svc.id]}</span>
+      )}
+    </button>
+  );
+
+  // カテゴリ別グループ（該当サービスがあるカテゴリのみ見出しを出す）
+  const renderGrouped = () =>
+    CATEGORY_ORDER.map((cat) => {
+      const items = visibleServices.filter((s) => s.category === cat);
+      if (items.length === 0) return null;
+      const collapsed = collapsedCategories.includes(cat);
+      const unread = items.reduce(
+        (a, s) => a + (serviceBadges[s.id] > 0 ? serviceBadges[s.id] : 0),
+        0
+      );
+      return (
+        <div key={cat}>
+          <button
+            className="sidebar-group-header"
+            onClick={() => toggleCategoryCollapsed(cat)}
+          >
+            {collapsed ? (
+              <FiChevronRight size={13} />
+            ) : (
+              <FiChevronDown size={13} />
+            )}
+            <span className="grow">{CATEGORY_LABELS[cat as ServiceCategory]}</span>
+            {collapsed && unread > 0 && (
+              <span className="unread-badge">{unread}</span>
+            )}
+          </button>
+          {!collapsed && items.map((svc) => serviceButton(svc))}
+        </div>
+      );
+    });
 
   const navItem = (
     key: ViewKey,
@@ -67,7 +168,11 @@ export function Sidebar({ onOpenAdd, onOpenSearch }: Props) {
   );
 
   return (
-    <aside className="sidebar">
+    <aside
+      className="sidebar"
+      style={{ width: sidebarWidth }}
+      onMouseLeave={onMouseLeave}
+    >
       <div className="sidebar-header">
         <span className="logo-mark">
           <FiInbox size={15} />
@@ -83,7 +188,7 @@ export function Sidebar({ onOpenAdd, onOpenSearch }: Props) {
         <span className="nav-badge">⌘K</span>
       </button>
 
-      {navItem('today', '今日', <FiSun size={16} />)}
+      {navItem('today', 'Home', <FiHome size={16} />)}
       {navItem(
         'inbox',
         'Inbox',
@@ -114,30 +219,10 @@ export function Sidebar({ onOpenAdd, onOpenSearch }: Props) {
             ? '「サービスを追加」からGmailやSlackなどを追加できます。'
             : '集中モードで表示するサービスが選択されていません。'}
         </div>
+      ) : sidebarGrouped ? (
+        renderGrouped()
       ) : (
-        visibleServices.map((svc, i) => (
-          <button
-            key={svc.id}
-            className={`nav-item ${
-              activeView === 'service' && activeServiceId === svc.id
-                ? 'active'
-                : ''
-            } ${dragIndex === i ? 'dragging' : ''}`}
-            onClick={() => openService(svc.id)}
-            title={svc.name}
-            draggable={canReorder}
-            onDragStart={() => canReorder && setDragIndex(i)}
-            onDragOver={(e) => canReorder && e.preventDefault()}
-            onDrop={() => canReorder && handleDrop(i)}
-            onDragEnd={() => setDragIndex(null)}
-          >
-            <ServiceIcon iconKey={svc.icon} chip={22} />
-            <span className="nav-label">{svc.name}</span>
-            {serviceBadges[svc.id] > 0 && (
-              <span className="unread-badge">{serviceBadges[svc.id]}</span>
-            )}
-          </button>
-        ))
+        visibleServices.map((svc) => serviceButton(svc))
       )}
 
       <div style={{ flex: 1 }} />
@@ -151,6 +236,15 @@ export function Sidebar({ onOpenAdd, onOpenSearch }: Props) {
         </button>
       </div>
       {navItem('settings', '設定', <FiSettings size={16} />)}
+
+      <div
+        className={`sidebar-resizer ${resizing ? 'active' : ''}`}
+        onMouseDown={(e) => {
+          resizeRef.current = { startX: e.clientX, startW: sidebarWidth };
+          setResizing(true);
+        }}
+        title="ドラッグで幅を調整"
+      />
     </aside>
   );
 }

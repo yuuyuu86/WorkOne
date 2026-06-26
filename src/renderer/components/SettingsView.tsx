@@ -33,6 +33,12 @@ export function SettingsView() {
   const setWeatherEnabled = useAppStore((s) => s.setWeatherEnabled);
   const weatherLocation = useAppStore((s) => s.weatherLocation);
   const setWeatherLocation = useAppStore((s) => s.setWeatherLocation);
+  const theme = useAppStore((s) => s.theme);
+  const setTheme = useAppStore((s) => s.setTheme);
+  const sidebarAutoHide = useAppStore((s) => s.sidebarAutoHide);
+  const setSidebarAutoHide = useAppStore((s) => s.setSidebarAutoHide);
+  const sidebarGrouped = useAppStore((s) => s.sidebarGrouped);
+  const setSidebarGrouped = useAppStore((s) => s.setSidebarGrouped);
   const [cityInput, setCityInput] = useState('');
   const [cityMsg, setCityMsg] = useState('');
   const [appVersion, setAppVersion] = useState('');
@@ -218,6 +224,65 @@ export function SettingsView() {
         <p className="muted" style={{ marginTop: 10 }}>
           並び替えは矢印ボタンで行います。「集中」のチェックは集中モードでの表示対象です。
         </p>
+      </div>
+
+      <div className="section">
+        <h3 className="section-title">外観</h3>
+        <div className="card">
+          <div className="check-row" style={{ gap: 12 }}>
+            <span className="grow">
+              テーマ
+              <div className="muted" style={{ marginTop: 2 }}>
+                「システム」は macOS の外観設定（ライト/ダーク）に自動で合わせます。
+              </div>
+            </span>
+            <div className="segmented">
+              {(
+                [
+                  ['system', 'システム'],
+                  ['light', 'ライト'],
+                  ['dark', 'ダーク'],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  className={theme === value ? 'active' : ''}
+                  onClick={() => setTheme(value)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <label className="check-row">
+            <input
+              type="checkbox"
+              checked={sidebarGrouped}
+              onChange={(e) => setSidebarGrouped(e.target.checked)}
+            />
+            <span className="grow">
+              サイドバーをカテゴリ別に表示する
+              <div className="muted" style={{ marginTop: 2 }}>
+                メール / チャット / 学校 / 予定 ごとにまとめ、見出しをクリックで
+                折りたたみできます。
+              </div>
+            </span>
+          </label>
+          <label className="check-row">
+            <input
+              type="checkbox"
+              checked={sidebarAutoHide}
+              onChange={(e) => setSidebarAutoHide(e.target.checked)}
+            />
+            <span className="grow">
+              サイドバーを自動で隠す
+              <div className="muted" style={{ marginTop: 2 }}>
+                オンにすると普段はサイドバーを隠し、画面の左端にカーソルを近づけると
+                サイドバーが表示されます。横幅はサイドバー右端をドラッグして調整できます。
+              </div>
+            </span>
+          </label>
+        </div>
       </div>
 
       <div className="section">
