@@ -19,7 +19,7 @@ export const SERVICE_TEMPLATES: ServiceTemplate[] = [
     url: 'https://mail.google.com/',
     category: 'mail',
     icon: 'gmail',
-    description: 'Google のメール。公式 Web 版でログインします。',
+    description: 'Google のメール。',
     supportLevel: WEB_ONLY,
   },
   {

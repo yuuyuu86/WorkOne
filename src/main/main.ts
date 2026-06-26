@@ -471,7 +471,7 @@ ipcMain.handle('geocode-city', async (_event, query: string) => {
 // --- 更新チェック（無料・署名/Apple ID 不要の「通知のみ」方式） ---
 // 配布先の GitHub リポジトリ（owner/repo）。空なら更新チェックは無効。
 // 例: 'yuuyuu86game/workone'
-const UPDATE_REPO = '';
+const UPDATE_REPO = 'yuuyuu86/WorkOne';
 
 function compareVersion(a: string, b: string): number {
   const pa = a.replace(/^v/, '').split('.').map(Number);

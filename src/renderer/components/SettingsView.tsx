@@ -429,8 +429,8 @@ export function SettingsView() {
           </div>
           <p className="muted" style={{ margin: 0, lineHeight: 1.6 }}>
             連絡・学校・予定系サービスを 1
-            つのアプリで開くための連絡専用ブラウザーです。各サービスは公式 Web
-            版を表示し、ログインは各サービスの公式画面で行います。
+            つのアプリにまとめて、すばやく開けるようにするアプリです。ログインは
+            各サービスの公式画面で行い、ID・パスワードは保存しません。
           </p>
           <div
             className="info-banner"

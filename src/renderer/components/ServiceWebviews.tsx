@@ -67,7 +67,7 @@ export function ServiceWebviews() {
       {showLayer && !hasActive && (
         <div className="empty-state" style={{ position: 'absolute', inset: 0, zIndex: 3 }}>
           <h3>サービスが選択されていません</h3>
-          <p>サイドバーからサービスを選ぶと、ここに公式Web版が表示されます。</p>
+          <p>サイドバーからサービスを選ぶと、ここに表示されます。</p>
         </div>
       )}
     </div>

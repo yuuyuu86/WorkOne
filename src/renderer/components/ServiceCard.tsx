@@ -31,7 +31,7 @@ export function ServiceCard({ template, added, onAdd }: Props) {
       <div className="service-card-desc">{template.description}</div>
 
       <div className="support-badges">
-        <span className="badge badge-on">Web表示</span>
+        <span className="badge badge-on">利用可能</span>
         <span className="badge badge-soon">通知統合は今後対応</span>
       </div>
 
