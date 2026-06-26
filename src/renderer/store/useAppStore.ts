@@ -44,6 +44,8 @@ type AppState = {
   notificationsEnabled: boolean;
   /** 起動時に全サービスを自動で読み込む（通知ハブ用、既定 ON） */
   autoloadServices: boolean;
+  /** 新着通知のときにアプリ内で音を鳴らす（既定 OFF） */
+  notificationSound: boolean;
   /** 通知をミュートするサービス ID（OS 通知を出さない） */
   mutedServices: string[];
   /** 重要サービス ID（重要グループ・集中モードでも通知） */
@@ -89,6 +91,7 @@ type AppState = {
   openService: (id: string) => void;
   setNotificationsEnabled: (enabled: boolean) => void;
   setAutoloadServices: (enabled: boolean) => void;
+  setNotificationSound: (enabled: boolean) => void;
   setHistoryEnabled: (enabled: boolean) => void;
   setWeatherEnabled: (enabled: boolean) => void;
   setWeatherLocation: (
@@ -192,6 +195,7 @@ export const useAppStore = create<AppState>()(
       // 「デスクトップ通知」）を主役にし、これは予備（タイトル/フィードからの簡易通知）。
       notificationsEnabled: false,
       autoloadServices: true,
+      notificationSound: false,
       mutedServices: [],
       importantServices: [],
       historyEnabled: true,
@@ -221,6 +225,7 @@ export const useAppStore = create<AppState>()(
         set({ notificationsEnabled: enabled }),
 
       setAutoloadServices: (enabled) => set({ autoloadServices: enabled }),
+      setNotificationSound: (enabled) => set({ notificationSound: enabled }),
 
       setHistoryEnabled: (enabled) => set({ historyEnabled: enabled }),
       setWeatherEnabled: (enabled) => set({ weatherEnabled: enabled }),
@@ -262,6 +267,7 @@ export const useAppStore = create<AppState>()(
             serviceUrls: s.serviceUrls,
             notificationsEnabled: s.notificationsEnabled,
             autoloadServices: s.autoloadServices,
+            notificationSound: s.notificationSound,
             historyEnabled: s.historyEnabled,
             weatherEnabled: s.weatherEnabled,
             weatherLocation: s.weatherLocation,
@@ -296,6 +302,7 @@ export const useAppStore = create<AppState>()(
             'serviceUrls',
             'notificationsEnabled',
             'autoloadServices',
+            'notificationSound',
             'historyEnabled',
             'weatherEnabled',
             'weatherLocation',
@@ -608,6 +615,7 @@ export const useAppStore = create<AppState>()(
         serviceUrls: state.serviceUrls,
         notificationsEnabled: state.notificationsEnabled,
         autoloadServices: state.autoloadServices,
+        notificationSound: state.notificationSound,
         historyEnabled: state.historyEnabled,
         history: state.history,
         weatherEnabled: state.weatherEnabled,

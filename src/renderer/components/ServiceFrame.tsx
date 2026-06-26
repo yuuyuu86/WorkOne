@@ -16,6 +16,7 @@ import { CHROME_USER_AGENT } from '../data/userAgent';
 import { SHARED_PARTITION } from '../lib/session';
 import { parseUnreadCount, hostnameOf } from '../lib/unread';
 import { isLoginUrl } from '../lib/login';
+import { playNotificationSound } from '../lib/sound';
 import type { Service } from '../types/service';
 
 type Props = {
@@ -303,6 +304,9 @@ export function ServiceFrame({ service, isActive }: Props) {
           body: data.body || '',
           receivedAt: new Date().toISOString(),
         });
+        // 新着の効果音（ミュート/おやすみ時間中は鳴らさない）
+        const st = useAppStore.getState();
+        if (st.notificationSound && !mutedRef.current) playNotificationSound();
       } catch {
         // 無視
       }

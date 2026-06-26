@@ -8,6 +8,7 @@ import { FocusModeView } from './components/FocusModeView';
 import { SettingsView } from './components/SettingsView';
 import { AddServiceModal } from './components/AddServiceModal';
 import { CommandPalette } from './components/CommandPalette';
+import { ShortcutsModal } from './components/ShortcutsModal';
 import { UpdateBanner } from './components/UpdateBanner';
 import { useAppStore } from './store/useAppStore';
 import { isWithinDnd } from './lib/dnd';
@@ -21,6 +22,7 @@ export default function App() {
   const dndEnd = useAppStore((s) => s.dndEnd);
   const [showAdd, setShowAdd] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
   // 自動非表示時に、左端ホバーでサイドバーを一時表示
   const [sidebarRevealed, setSidebarRevealed] = useState(false);
 
@@ -39,6 +41,31 @@ export default function App() {
       return () => mq.removeEventListener('change', apply);
     }
   }, [theme]);
+
+  // 「?」キーでショートカット一覧を開く（入力欄にフォーカス中は無効）
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== '?') return;
+      const el = document.activeElement as HTMLElement | null;
+      const tag = el?.tagName;
+      if (
+        tag === 'INPUT' ||
+        tag === 'TEXTAREA' ||
+        tag === 'SELECT' ||
+        el?.isContentEditable
+      )
+        return;
+      e.preventDefault();
+      setShowShortcuts((v) => !v);
+    };
+    const onShow = () => setShowShortcuts(true);
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('md:show-shortcuts', onShow);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('md:show-shortcuts', onShow);
+    };
+  }, []);
 
   // おやすみ時間（DND）の現在状態を1分ごとに評価してストアへ反映
   useEffect(() => {
@@ -159,6 +186,9 @@ export default function App() {
       </div>
       {showAdd && <AddServiceModal onClose={() => setShowAdd(false)} />}
       {showSearch && <CommandPalette onClose={() => setShowSearch(false)} />}
+      {showShortcuts && (
+        <ShortcutsModal onClose={() => setShowShortcuts(false)} />
+      )}
     </div>
   );
 }

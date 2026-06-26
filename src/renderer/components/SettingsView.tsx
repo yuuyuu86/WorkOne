@@ -25,6 +25,8 @@ export function SettingsView() {
   const setNotificationsEnabled = useAppStore((s) => s.setNotificationsEnabled);
   const autoloadServices = useAppStore((s) => s.autoloadServices);
   const setAutoloadServices = useAppStore((s) => s.setAutoloadServices);
+  const notificationSound = useAppStore((s) => s.notificationSound);
+  const setNotificationSound = useAppStore((s) => s.setNotificationSound);
   const historyEnabled = useAppStore((s) => s.historyEnabled);
   const setHistoryEnabled = useAppStore((s) => s.setHistoryEnabled);
   const clearHistory = useAppStore((s) => s.clearHistory);
@@ -369,6 +371,20 @@ export function SettingsView() {
               </div>
             </span>
           </label>
+          <label className="check-row">
+            <input
+              type="checkbox"
+              checked={notificationSound}
+              onChange={(e) => setNotificationSound(e.target.checked)}
+            />
+            <span className="grow">
+              新着通知のときに音を鳴らす
+              <div className="muted" style={{ marginTop: 2 }}>
+                サービスから通知が届いたときにアプリ内で短い効果音を鳴らします。
+                ミュート中・おやすみ時間中は鳴りません。
+              </div>
+            </span>
+          </label>
         </div>
       </div>
 
@@ -617,12 +633,20 @@ export function SettingsView() {
           <p className="muted" style={{ margin: '0 0 10px' }}>
             バージョン {appVersion || '0.1.0'}
           </p>
-          <div style={{ marginBottom: 12 }}>
+          <div style={{ marginBottom: 12, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
             <button className="btn btn-sm" onClick={handleCheckUpdate}>
               更新を確認
             </button>
+            <button
+              className="btn btn-sm"
+              onClick={() =>
+                window.dispatchEvent(new CustomEvent('md:show-shortcuts'))
+              }
+            >
+              ショートカット一覧（?）
+            </button>
             {updateMsg && (
-              <span className="muted" style={{ marginLeft: 10 }}>
+              <span className="muted" style={{ marginLeft: 2 }}>
                 {updateMsg}
               </span>
             )}
