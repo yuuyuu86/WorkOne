@@ -97,11 +97,20 @@ export function Sidebar({ onOpenAdd, onOpenSearch, onMouseLeave }: Props) {
     visibleServices = []; // 完全集中モードはサービス一覧を隠す
   }
 
-  // 1 サービス分のボタン
-  const serviceButton = (svc: Service) => (
+  // Slack のワークスペースか（host が slack.com 系）
+  const isSlackService = (s: Service) => {
+    try {
+      return new URL(s.url).hostname.endsWith('slack.com');
+    } catch {
+      return false;
+    }
+  };
+
+  // 1 サービス分のボタン（sub=true でワークスペース等の入れ子表示）
+  const serviceButton = (svc: Service, sub = false) => (
     <button
       key={svc.id}
-      className={`nav-item ${
+      className={`nav-item ${sub ? 'nav-sub' : ''} ${
         activeView === 'service' && activeServiceId === svc.id ? 'active' : ''
       } ${dragId === svc.id ? 'dragging' : ''}`}
       onClick={() => openService(svc.id)}
@@ -112,13 +121,68 @@ export function Sidebar({ onOpenAdd, onOpenSearch, onMouseLeave }: Props) {
       onDrop={() => canReorder && handleDropOn(svc)}
       onDragEnd={() => setDragId(null)}
     >
-      <ServiceIcon iconKey={svc.icon} chip={22} />
+      <ServiceIcon iconKey={svc.icon} chip={sub ? 18 : 22} />
       <span className="nav-label">{svc.name}</span>
       {serviceBadges[svc.id] > 0 && (
         <span className="unread-badge">{serviceBadges[svc.id]}</span>
       )}
     </button>
   );
+
+  // Slack ワークスペースをまとめたプルダウン（2 件以上のとき）
+  const SLACK_KEY = '__slack';
+  const slackNode = (slackItems: Service[]) => {
+    if (slackItems.length === 1) return serviceButton(slackItems[0]);
+    const collapsed = collapsedCategories.includes(SLACK_KEY);
+    const unread = slackItems.reduce(
+      (a, s) => a + (serviceBadges[s.id] > 0 ? serviceBadges[s.id] : 0),
+      0
+    );
+    const childActive =
+      activeView === 'service' &&
+      slackItems.some((s) => s.id === activeServiceId);
+    return (
+      <div key={SLACK_KEY}>
+        <button
+          className={`nav-item ${childActive && collapsed ? 'active' : ''}`}
+          onClick={() => toggleCategoryCollapsed(SLACK_KEY)}
+          title="Slack ワークスペース"
+        >
+          <ServiceIcon iconKey="slack" chip={22} />
+          <span className="nav-label">Slack</span>
+          {collapsed && unread > 0 && (
+            <span className="unread-badge">{unread}</span>
+          )}
+          <span className="nav-icon" style={{ marginLeft: 'auto' }}>
+            {collapsed ? (
+              <FiChevronRight size={14} />
+            ) : (
+              <FiChevronDown size={14} />
+            )}
+          </span>
+        </button>
+        {!collapsed && slackItems.map((svc) => serviceButton(svc, true))}
+      </div>
+    );
+  };
+
+  // サービス一覧を描画。Slack ワークスペースは 1 つのプルダウンにまとめる。
+  const renderServiceList = (items: Service[]) => {
+    const slackItems = items.filter(isSlackService);
+    const out: React.ReactNode[] = [];
+    let slackEmitted = false;
+    for (const svc of items) {
+      if (isSlackService(svc)) {
+        if (!slackEmitted) {
+          out.push(slackNode(slackItems));
+          slackEmitted = true;
+        }
+        continue;
+      }
+      out.push(serviceButton(svc));
+    }
+    return out;
+  };
 
   // カテゴリ別グループ（該当サービスがあるカテゴリのみ見出しを出す）
   const renderGrouped = () =>
@@ -146,7 +210,7 @@ export function Sidebar({ onOpenAdd, onOpenSearch, onMouseLeave }: Props) {
               <span className="unread-badge">{unread}</span>
             )}
           </button>
-          {!collapsed && items.map((svc) => serviceButton(svc))}
+          {!collapsed && renderServiceList(items)}
         </div>
       );
     });
@@ -222,7 +286,7 @@ export function Sidebar({ onOpenAdd, onOpenSearch, onMouseLeave }: Props) {
       ) : sidebarGrouped ? (
         renderGrouped()
       ) : (
-        visibleServices.map((svc) => serviceButton(svc))
+        renderServiceList(visibleServices)
       )}
 
       <div style={{ flex: 1 }} />

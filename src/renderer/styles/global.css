@@ -210,6 +210,12 @@ textarea {
   opacity: 0.4;
 }
 
+/* 入れ子のサブ項目（Slack ワークスペースなど） */
+.nav-item.nav-sub {
+  padding-left: 30px;
+  font-size: 13px;
+}
+
 .unread-badge {
   min-width: 18px;
   height: 18px;

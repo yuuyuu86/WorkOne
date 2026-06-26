@@ -39,6 +39,15 @@ export function SettingsView() {
   const setSidebarAutoHide = useAppStore((s) => s.setSidebarAutoHide);
   const sidebarGrouped = useAppStore((s) => s.sidebarGrouped);
   const setSidebarGrouped = useAppStore((s) => s.setSidebarGrouped);
+  const dndEnabled = useAppStore((s) => s.dndEnabled);
+  const setDndEnabled = useAppStore((s) => s.setDndEnabled);
+  const dndStart = useAppStore((s) => s.dndStart);
+  const dndEnd = useAppStore((s) => s.dndEnd);
+  const dndActive = useAppStore((s) => s.dndActive);
+  const setDndWindow = useAppStore((s) => s.setDndWindow);
+  const exportSettings = useAppStore((s) => s.exportSettings);
+  const importSettings = useAppStore((s) => s.importSettings);
+  const [ioMsg, setIoMsg] = useState('');
   const [cityInput, setCityInput] = useState('');
   const [cityMsg, setCityMsg] = useState('');
   const [appVersion, setAppVersion] = useState('');
@@ -61,6 +70,40 @@ export function SettingsView() {
       api.openExternal?.(u.url);
     } else {
       setUpdateMsg('最新です（または配信先が未設定です）');
+    }
+  };
+
+  const handleExport = () => {
+    try {
+      const json = exportSettings();
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const date = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `workone-settings-${date}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setIoMsg('設定を書き出しました。');
+    } catch {
+      setIoMsg('書き出しに失敗しました。');
+    }
+  };
+
+  const handleImportFile = async (file: File) => {
+    const ok = await confirmAction(
+      '設定をインポートすると、現在のサービス一覧や設定が上書きされます。続けますか？'
+    );
+    if (!ok) return;
+    try {
+      const text = await file.text();
+      if (importSettings(text)) {
+        setIoMsg('設定を読み込みました。反映するにはアプリを再起動してください。');
+      } else {
+        setIoMsg('読み込みに失敗しました。ファイル形式を確認してください。');
+      }
+    } catch {
+      setIoMsg('読み込みに失敗しました。');
     }
   };
 
@@ -330,6 +373,65 @@ export function SettingsView() {
       </div>
 
       <div className="section">
+        <h3 className="section-title">おやすみ時間</h3>
+        <div className="card">
+          <label className="check-row">
+            <input
+              type="checkbox"
+              checked={dndEnabled}
+              onChange={(e) => setDndEnabled(e.target.checked)}
+            />
+            <span className="grow">
+              指定した時間帯は通知を止める
+              <div className="muted" style={{ marginTop: 2 }}>
+                おやすみ時間中は OS 通知を出しません（Inbox には記録されます）。
+                {dndEnabled && (
+                  <>
+                    {' '}
+                    現在は
+                    <strong>
+                      {dndActive ? 'おやすみ時間中' : 'おやすみ時間外'}
+                    </strong>
+                    です。
+                  </>
+                )}
+              </div>
+            </span>
+          </label>
+          {dndEnabled && (
+            <div className="check-row" style={{ gap: 12, flexWrap: 'wrap' }}>
+              <span className="grow">時間帯</span>
+              <input
+                type="time"
+                value={dndStart}
+                onChange={(e) => setDndWindow(e.target.value, dndEnd)}
+                style={{
+                  padding: '6px 8px',
+                  border: '1px solid var(--border-strong)',
+                  borderRadius: 'var(--radius-sm)',
+                  background: 'var(--panel-bg)',
+                  color: 'var(--text)',
+                }}
+              />
+              <span className="muted">〜</span>
+              <input
+                type="time"
+                value={dndEnd}
+                onChange={(e) => setDndWindow(dndStart, e.target.value)}
+                style={{
+                  padding: '6px 8px',
+                  border: '1px solid var(--border-strong)',
+                  borderRadius: 'var(--radius-sm)',
+                  background: 'var(--panel-bg)',
+                  color: 'var(--text)',
+                }}
+              />
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="section">
         <h3 className="section-title">検索・履歴</h3>
         <div className="card">
           <label className="check-row">
@@ -427,6 +529,39 @@ export function SettingsView() {
                 </span>
               )}
             </div>
+          )}
+        </div>
+      </div>
+
+      <div className="section">
+        <h3 className="section-title">設定のバックアップ</h3>
+        <div className="card" style={{ padding: 16 }}>
+          <p className="muted" style={{ margin: '0 0 12px', lineHeight: 1.6 }}>
+            追加したサービス・並び順・各種設定を JSON ファイルに書き出し／読み込みできます。
+            パスワード・メール本文・閲覧履歴は含まれません。
+          </p>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button className="btn" onClick={handleExport}>
+              設定をエクスポート
+            </button>
+            <label className="btn" style={{ cursor: 'pointer' }}>
+              設定をインポート
+              <input
+                type="file"
+                accept="application/json,.json"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleImportFile(f);
+                  e.target.value = '';
+                }}
+              />
+            </label>
+          </div>
+          {ioMsg && (
+            <p className="muted" style={{ marginTop: 10, marginBottom: 0 }}>
+              {ioMsg}
+            </p>
           )}
         </div>
       </div>

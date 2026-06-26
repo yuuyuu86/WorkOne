@@ -68,16 +68,23 @@ export function ServiceFrame({ service, isActive }: Props) {
   const isImportantService = useAppStore((s) =>
     s.importantServices.includes(service.id)
   );
+  const dndActive = useAppStore((s) => s.dndActive);
 
   // このサービスの通知を抑制するか。
-  // 明示ミュート > 重要(集中でも通知) > 集中モードの抑制
+  // おやすみ時間 > 明示ミュート > 重要(集中でも通知) > 集中モードの抑制
   const focusMuted =
     focusMode === 'deep'
       ? true
       : focusMode === 'focus'
       ? !focusServiceIds.includes(service.id)
       : false;
-  const muted = isMutedService ? true : isImportantService ? false : focusMuted;
+  const muted = dndActive
+    ? true
+    : isMutedService
+    ? true
+    : isImportantService
+    ? false
+    : focusMuted;
   const mutedRef = useRef(muted);
   mutedRef.current = muted;
 
@@ -96,9 +103,15 @@ export function ServiceFrame({ service, isActive }: Props) {
     };
   }, []);
 
+  const setServiceZoom = useAppStore((s) => s.setServiceZoom);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
-  const [zoom, setZoom] = useState(0);
+  // ズーム倍率はサービスごとに保存した値で初期化する
+  const [zoom, setZoom] = useState(
+    () => useAppStore.getState().serviceZoom[service.id] ?? 0
+  );
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
 
   // Gmail はセッション流用で公式 atom フィードから未読を取得できる
   const isGmail = useMemo(() => {
@@ -212,6 +225,14 @@ export function ServiceFrame({ service, isActive }: Props) {
           `window.__mdockMuted=${mutedRef.current};`,
           false
         ).catch(() => {});
+      }
+      // 再読み込みでズームが戻ることがあるので保存値を再適用
+      if (w && typeof w.setZoomLevel === 'function') {
+        try {
+          w.setZoomLevel(zoomRef.current);
+        } catch {
+          /* 無視 */
+        }
       }
     };
 
@@ -414,7 +435,7 @@ export function ServiceFrame({ service, isActive }: Props) {
     return () => window.removeEventListener('md:webview-cmd', onCmd);
   }, []);
 
-  // ズームレベルを webview に適用
+  // ズームレベルを webview に適用し、サービスごとに保存する
   useEffect(() => {
     const wv = webviewRef.current;
     if (wv && typeof wv.setZoomLevel === 'function') {
@@ -424,7 +445,8 @@ export function ServiceFrame({ service, isActive }: Props) {
         /* 無視 */
       }
     }
-  }, [zoom]);
+    setServiceZoom(service.id, zoom);
+  }, [zoom, service.id, setServiceZoom]);
 
   // 再生中の動画（Meet の話者映像など）だけを OS のピクチャーインピクチャー小窓に出す。
   // webview 内で requestPictureInPicture を実行する（preload 不要）。

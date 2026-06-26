@@ -10,11 +10,15 @@ import { AddServiceModal } from './components/AddServiceModal';
 import { CommandPalette } from './components/CommandPalette';
 import { UpdateBanner } from './components/UpdateBanner';
 import { useAppStore } from './store/useAppStore';
+import { isWithinDnd } from './lib/dnd';
 
 export default function App() {
   const activeView = useAppStore((s) => s.activeView);
   const theme = useAppStore((s) => s.theme);
   const sidebarAutoHide = useAppStore((s) => s.sidebarAutoHide);
+  const dndEnabled = useAppStore((s) => s.dndEnabled);
+  const dndStart = useAppStore((s) => s.dndStart);
+  const dndEnd = useAppStore((s) => s.dndEnd);
   const [showAdd, setShowAdd] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   // 自動非表示時に、左端ホバーでサイドバーを一時表示
@@ -35,6 +39,17 @@ export default function App() {
       return () => mq.removeEventListener('change', apply);
     }
   }, [theme]);
+
+  // おやすみ時間（DND）の現在状態を1分ごとに評価してストアへ反映
+  useEffect(() => {
+    const evaluate = () => {
+      const active = dndEnabled && isWithinDnd(dndStart, dndEnd);
+      useAppStore.getState().setDndActive(active);
+    };
+    evaluate();
+    const t = setInterval(evaluate, 30000);
+    return () => clearInterval(t);
+  }, [dndEnabled, dndStart, dndEnd]);
   // Cmd/Ctrl+K はメニューのアクセラレータで処理（webview にフォーカスがあっても効くため）
 
   // メニュー/キーボードショートカットのコマンドを処理

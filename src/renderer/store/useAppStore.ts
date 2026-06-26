@@ -67,6 +67,14 @@ type AppState = {
   sidebarGrouped: boolean;
   /** 折りたたみ中のカテゴリ */
   collapsedCategories: string[];
+  /** おやすみ時間（DND）。指定時間帯は通知を出さない */
+  dndEnabled: boolean;
+  dndStart: string; // "HH:MM"
+  dndEnd: string; // "HH:MM"
+  /** 現在おやすみ時間中か（揮発・App のタイマーが更新） */
+  dndActive: boolean;
+  /** サービスごとのズーム倍率（Electron zoomLevel、永続化） */
+  serviceZoom: Record<string, number>;
 
   // 揮発（UI ナビゲーション・未読バッジ）
   activeView: ViewKey;
@@ -91,6 +99,14 @@ type AppState = {
   setSidebarAutoHide: (enabled: boolean) => void;
   setSidebarGrouped: (enabled: boolean) => void;
   toggleCategoryCollapsed: (category: string) => void;
+  setDndEnabled: (enabled: boolean) => void;
+  setDndWindow: (start: string, end: string) => void;
+  setDndActive: (active: boolean) => void;
+  setServiceZoom: (id: string, zoom: number) => void;
+  /** 設定をエクスポート（JSON 文字列） */
+  exportSettings: () => string;
+  /** 設定をインポート（成功で true） */
+  importSettings: (json: string) => boolean;
   /** 閲覧履歴を1件記録（同一 URL は最新化して先頭へ） */
   addHistory: (entry: Omit<HistoryEntry, 'id' | 'visitedAt'>) => void;
   clearHistory: () => void;
@@ -188,6 +204,11 @@ export const useAppStore = create<AppState>()(
       sidebarAutoHide: false,
       sidebarGrouped: true,
       collapsedCategories: [],
+      dndEnabled: false,
+      dndStart: '22:00',
+      dndEnd: '07:00',
+      dndActive: false,
+      serviceZoom: {},
 
       activeView: 'today',
       activeServiceId: null,
@@ -216,6 +237,89 @@ export const useAppStore = create<AppState>()(
             ? get().collapsedCategories.filter((c) => c !== category)
             : [...get().collapsedCategories, category],
         });
+      },
+      setDndEnabled: (enabled) => set({ dndEnabled: enabled }),
+      setDndWindow: (start, end) => set({ dndStart: start, dndEnd: end }),
+      setDndActive: (active) => {
+        if (get().dndActive !== active) set({ dndActive: active });
+      },
+      setServiceZoom: (id, zoom) => {
+        if ((get().serviceZoom[id] ?? 0) === zoom) return;
+        set({ serviceZoom: { ...get().serviceZoom, [id]: zoom } });
+      },
+
+      exportSettings: () => {
+        const s = get();
+        const data = {
+          app: 'WorkOne',
+          version: 1,
+          exportedAt: new Date().toISOString(),
+          settings: {
+            services: s.services,
+            readLater: s.readLater,
+            focusMode: s.focusMode,
+            focusServiceIds: s.focusServiceIds,
+            serviceUrls: s.serviceUrls,
+            notificationsEnabled: s.notificationsEnabled,
+            autoloadServices: s.autoloadServices,
+            historyEnabled: s.historyEnabled,
+            weatherEnabled: s.weatherEnabled,
+            weatherLocation: s.weatherLocation,
+            theme: s.theme,
+            sidebarWidth: s.sidebarWidth,
+            sidebarAutoHide: s.sidebarAutoHide,
+            sidebarGrouped: s.sidebarGrouped,
+            collapsedCategories: s.collapsedCategories,
+            dndEnabled: s.dndEnabled,
+            dndStart: s.dndStart,
+            dndEnd: s.dndEnd,
+            serviceZoom: s.serviceZoom,
+            mutedServices: s.mutedServices,
+            importantServices: s.importantServices,
+          },
+        };
+        // 履歴・通知（本文を含みうる）はエクスポートしない
+        return JSON.stringify(data, null, 2);
+      },
+
+      importSettings: (json) => {
+        try {
+          const parsed = JSON.parse(json);
+          const st = parsed?.settings;
+          if (!st || !Array.isArray(st.services)) return false;
+          // 既知のキーだけを取り込む（未知キーは無視）
+          const allowed: (keyof AppState)[] = [
+            'services',
+            'readLater',
+            'focusMode',
+            'focusServiceIds',
+            'serviceUrls',
+            'notificationsEnabled',
+            'autoloadServices',
+            'historyEnabled',
+            'weatherEnabled',
+            'weatherLocation',
+            'theme',
+            'sidebarWidth',
+            'sidebarAutoHide',
+            'sidebarGrouped',
+            'collapsedCategories',
+            'dndEnabled',
+            'dndStart',
+            'dndEnd',
+            'serviceZoom',
+            'mutedServices',
+            'importantServices',
+          ];
+          const next: Partial<AppState> = {};
+          for (const k of allowed) {
+            if (st[k] !== undefined) (next as any)[k] = st[k];
+          }
+          set(next as AppState);
+          return true;
+        } catch {
+          return false;
+        }
       },
 
       addHistory: (entry) => {
@@ -392,9 +496,12 @@ export const useAppStore = create<AppState>()(
         const services = get().services.filter((s) => s.id !== id);
         const serviceUrls = { ...get().serviceUrls };
         delete serviceUrls[id];
+        const serviceZoom = { ...get().serviceZoom };
+        delete serviceZoom[id];
         set({
           services,
           serviceUrls,
+          serviceZoom,
           notifications: get().notifications.filter((n) => n.serviceId !== id),
           history: get().history.filter((h) => h.serviceId !== id),
           mutedServices: get().mutedServices.filter((x) => x !== id),
@@ -510,6 +617,10 @@ export const useAppStore = create<AppState>()(
         sidebarAutoHide: state.sidebarAutoHide,
         sidebarGrouped: state.sidebarGrouped,
         collapsedCategories: state.collapsedCategories,
+        dndEnabled: state.dndEnabled,
+        dndStart: state.dndStart,
+        dndEnd: state.dndEnd,
+        serviceZoom: state.serviceZoom,
         mutedServices: state.mutedServices,
         importantServices: state.importantServices,
       }),
