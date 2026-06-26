@@ -602,6 +602,40 @@ textarea {
   100% { left: 100%; width: 30%; }
 }
 
+/* ログイン切れ通知バナー（webview 上部） */
+.login-expired-banner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 13px;
+}
+
+.login-expired-banner .grow {
+  flex: 1;
+}
+
+.login-expired-banner .btn {
+  background: #fff;
+  border-color: #fff;
+  color: var(--danger);
+}
+
+.login-expired-banner .icon-btn {
+  color: #fff;
+}
+
+.login-expired-banner .icon-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
 /* 読み込み失敗オーバーレイ */
 .webview-error {
   position: absolute;

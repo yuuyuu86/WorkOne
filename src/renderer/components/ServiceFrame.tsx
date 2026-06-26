@@ -7,6 +7,7 @@ import {
   FiExternalLink,
   FiBookmark,
   FiMonitor,
+  FiX,
 } from 'react-icons/fi';
 import { MdPictureInPictureAlt } from 'react-icons/md';
 import { useAppStore } from '../store/useAppStore';
@@ -14,6 +15,7 @@ import { ServiceIcon } from './ServiceIcon';
 import { CHROME_USER_AGENT } from '../data/userAgent';
 import { SHARED_PARTITION } from '../lib/session';
 import { parseUnreadCount, hostnameOf } from '../lib/unread';
+import { isLoginUrl } from '../lib/login';
 import type { Service } from '../types/service';
 
 type Props = {
@@ -139,6 +141,13 @@ export function ServiceFrame({ service, isActive }: Props) {
   const [currentTitle, setCurrentTitle] = useState(service.name);
   const [saved, setSaved] = useState(false);
 
+  // ログイン切れ検知。一度ログイン済み（非ログイン画面）になった後で
+  // ログイン画面へ戻されたらセッション切れとみなす。
+  const [loginExpired, setLoginExpired] = useState(false);
+  const wasLoggedInRef = useRef(false);
+  const loginExpiredRef = useRef(false);
+  loginExpiredRef.current = loginExpired;
+
   useEffect(() => {
     const wv = webviewRef.current;
     if (!wv) return;
@@ -148,6 +157,28 @@ export function ServiceFrame({ service, isActive }: Props) {
         currentUrlRef.current = e.url;
         setCurrentUrl(e.url);
         setServiceLastUrl(service.id, e.url);
+
+        // ログイン切れ検知
+        if (isLoginUrl(e.url)) {
+          // 既にログイン済みだった→セッション切れ。初回ログインは対象外。
+          if (wasLoggedInRef.current && !loginExpiredRef.current) {
+            setLoginExpired(true);
+            addNotification({
+              id: `${service.id}:login:${new Date()
+                .toISOString()
+                .slice(0, 13)}`,
+              serviceId: service.id,
+              serviceName: service.name,
+              icon: service.icon,
+              title: 'ログインが切れた可能性があります',
+              body: `${service.name} に再ログインしてください`,
+              receivedAt: new Date().toISOString(),
+            });
+          }
+        } else {
+          wasLoggedInRef.current = true;
+          if (loginExpiredRef.current) setLoginExpired(false);
+        }
       }
     };
     const onTitle = (e: any) => {
@@ -591,6 +622,29 @@ export function ServiceFrame({ service, isActive }: Props) {
 
       <div className="webview-host">
         {loading && !failed && <div className="loading-bar" />}
+        {loginExpired && (
+          <div className="login-expired-banner">
+            <span className="grow">
+              ログインが切れたようです。再ログインしてください。
+            </span>
+            <button
+              className="btn btn-sm"
+              onClick={() => {
+                setLoginExpired(false);
+                webviewRef.current?.reload?.();
+              }}
+            >
+              <FiRotateCw size={13} /> 再読み込み
+            </button>
+            <button
+              className="icon-btn"
+              title="閉じる"
+              onClick={() => setLoginExpired(false)}
+            >
+              <FiX size={15} />
+            </button>
+          </div>
+        )}
         <webview
           ref={webviewRef}
           src={initialSrc}
