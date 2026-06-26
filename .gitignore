@@ -1,0 +1,9 @@
+node_modules/
+dist/
+dist-electron/
+release/
+build/icon.png
+build/trayTemplate*.png
+*.log
+.DS_Store
+.vite/
