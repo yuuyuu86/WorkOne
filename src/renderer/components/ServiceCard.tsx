@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { FiCheck, FiPlus } from 'react-icons/fi';
 import type { ServiceTemplate } from '../types/service';
 import { CATEGORY_LABELS } from '../types/service';
@@ -8,9 +9,11 @@ type Props = {
   template: ServiceTemplate;
   added: boolean;
   onAdd: () => void;
+  /** カード内、主要ボタンの下に追加で表示する要素（Slack のワークスペース追加など） */
+  children?: ReactNode;
 };
 
-export function ServiceCard({ template, added, onAdd }: Props) {
+export function ServiceCard({ template, added, onAdd, children }: Props) {
   return (
     <div className="card service-card">
       <div className="service-card-head">
@@ -50,6 +53,8 @@ export function ServiceCard({ template, added, onAdd }: Props) {
           </>
         )}
       </button>
+
+      {children}
     </div>
   );
 }

@@ -55,8 +55,6 @@ export function AddServiceModal({ onClose }: Props) {
             ))}
           </div>
 
-          {tab === 'chat' && <SlackWorkspaceForm onAdded={onClose} />}
-
           {tab === 'custom' ? (
             <CustomServiceForm onAdded={onClose} />
           ) : (
@@ -67,7 +65,11 @@ export function AddServiceModal({ onClose }: Props) {
                   template={t}
                   added={isTemplateAdded(t)}
                   onAdd={() => addServiceFromTemplate(t)}
-                />
+                >
+                  {t.templateKey === 'slack' && (
+                    <SlackWorkspaceForm onAdded={onClose} />
+                  )}
+                </ServiceCard>
               ))}
             </div>
           )}

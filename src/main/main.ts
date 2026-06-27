@@ -113,7 +113,7 @@ function createWindow() {
     titleBarStyle: 'hiddenInset',
     icon: path.join(RESOURCES_DIR, 'icon.png'),
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, 'preload.mjs'),
       // --- セキュリティ設定（仕様の必須条件） ---
       nodeIntegration: false, // レンダラーで Node を無効化
       contextIsolation: true, // コンテキスト分離を有効化
@@ -508,6 +508,200 @@ ipcMain.handle('check-update', async () => {
 // 現在のアプリバージョン
 ipcMain.handle('app-version', () => app.getVersion());
 
+// ===== Classroom / Calendar の取得（ログイン済みセッションを使った DOM 読み取り） =====
+// 共有プロファイル(SHARED_PARTITION)の非表示ウィンドウで対象ページを開き、
+// 自分のアカウントの画面から自分の課題・予定を読み取ってローカル表示する。
+// Google の class 名は難読化されるため、比較的安定している href / aria-label を主に使う。
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+type ScrapeResult<T> = {
+  ok: boolean;
+  loginRequired: boolean;
+  /** 想定ホスト外（製品紹介ページ等）へ飛ばされ取得不能。管理者が無効化している場合など。 */
+  unavailable: boolean;
+  items: T[];
+};
+
+// 非表示ウィンドウでページを開き、extractor(JS文字列) を繰り返し実行して
+// 結果（配列）が得られるまで待つ。ログイン画面へ飛んだら loginRequired、
+// 想定ホスト外（製品紹介ページ等）へ飛んだら unavailable を返す。
+async function scrapeInHiddenWindow<T>(
+  url: string,
+  extractor: string,
+  opts: {
+    timeoutMs?: number;
+    settleMs?: number;
+    expectHost?: string;
+    /** false にすると「URL に signin 等を含む＝未ログイン」の自動判定を行わない */
+    loginCheck?: boolean;
+  } = {}
+): Promise<ScrapeResult<T>> {
+  const timeoutMs = opts.timeoutMs ?? 16000;
+  const settleMs = opts.settleMs ?? 1000;
+  const expectHost = opts.expectHost;
+  const loginCheck = opts.loginCheck ?? true;
+  const win = new BrowserWindow({
+    show: false,
+    width: 1280,
+    height: 1000,
+    webPreferences: {
+      partition: SHARED_PARTITION,
+      contextIsolation: true,
+      nodeIntegration: false,
+      // 背景でも描画を続けてもらう（SPA のレンダリングのため）
+      backgroundThrottling: false,
+    },
+  });
+  win.webContents.setUserAgent(normalizedUserAgent());
+  try {
+    try {
+      await win.loadURL(url);
+    } catch {
+      /* リダイレクト等で reject されることがあるが続行 */
+    }
+    const deadline = Date.now() + timeoutMs;
+    let last: T[] = [];
+    while (Date.now() < deadline) {
+      const cur = win.webContents.getURL();
+      if (loginCheck && /accounts\.google\.com|ServiceLogin|signin/i.test(cur)) {
+        return { ok: false, loginRequired: true, unavailable: false, items: [] };
+      }
+      // 想定ホスト外（例: workspace.google.com の製品紹介）へ飛ばされた＝利用不可
+      if (expectHost) {
+        try {
+          const host = new URL(cur).hostname;
+          if (cur && !host.endsWith(expectHost)) {
+            return {
+              ok: false,
+              loginRequired: false,
+              unavailable: true,
+              items: [],
+            };
+          }
+        } catch {
+          /* URL 解析失敗は無視 */
+        }
+      }
+      try {
+        const r = (await win.webContents.executeJavaScript(extractor)) as T[];
+        if (Array.isArray(r) && r.length > 0) {
+          return { ok: true, loginRequired: false, unavailable: false, items: r };
+        }
+        if (Array.isArray(r)) last = r;
+      } catch {
+        /* まだ描画前など */
+      }
+      await sleep(settleMs);
+    }
+    return { ok: true, loginRequired: false, unavailable: false, items: last };
+  } finally {
+    if (!win.isDestroyed()) win.destroy();
+  }
+}
+
+// Classroom の「ToDo（未提出）」ページから課題を抽出する extractor。
+// class 名は難読化されるため、安定している href（/c/.../a/...）を起点に、
+// アンカー内の葉ノードのテキストを集めてタイトル/コース/期限に振り分ける。
+const CLASSROOM_EXTRACTOR = `(() => {
+  // Material アイコンのリガチャ文字（textContent に紛れ込む）を除外
+  const ICON_RE = /^(assignment|assignment_turned_in|quiz|book|description|material|today|event|class|article|menu_book|attach_file|grading|push_pin|more_vert|insert_drive_file|folder)$/i;
+  const DATE_RE = /(\\d{1,2}\\s*月\\s*\\d{1,2}\\s*日|今日|明日|期限|締切|Due)/;
+  const out = [];
+  const seen = new Set();
+  const anchors = Array.from(document.querySelectorAll('a[href]'));
+  for (const a of anchors) {
+    const href = a.href || a.getAttribute('href') || '';
+    if (!/\\/c\\/[^/]+\\/(a|sa)\\/[^/]+/.test(href)) continue;
+    if (seen.has(href)) continue;
+    // アンカー配下の「子要素を持たない＝葉」テキストを集める。アイコンは除く。
+    let leaves = Array.from(a.querySelectorAll('*'))
+      .filter((el) => el.children.length === 0)
+      .filter((el) => !el.matches('i, [class*="icon" i], [aria-hidden="true"]'))
+      .map((el) => (el.textContent || '').replace(/\\s+/g, ' ').trim())
+      .filter((t) => t && !ICON_RE.test(t));
+    // 重複除去（順序維持）
+    const uniq = [];
+    for (const t of leaves) if (!uniq.includes(t)) uniq.push(t);
+    if (uniq.length === 0) continue;
+    const title = uniq[0];
+    let course = '';
+    let due = '';
+    let posted = '';
+    for (let i = 1; i < uniq.length; i++) {
+      const t = uniq[i];
+      if (/投稿|posted/i.test(t)) { if (!posted) posted = t; continue; }
+      if (/期限なし|締切なし|No due/i.test(t)) continue;
+      if (!due && DATE_RE.test(t)) { due = t; continue; }
+      if (!course && t.length <= 60) course = t;
+    }
+    seen.add(href);
+    out.push({
+      title: title.slice(0, 120),
+      href,
+      due: (due || '').slice(0, 60),
+      course: (course || '').slice(0, 80),
+    });
+  }
+  return out.slice(0, 50);
+})()`;
+
+ipcMain.handle('scrape-classroom', async () => {
+  return scrapeInHiddenWindow(
+    'https://classroom.google.com/a/not-turned-in/all',
+    CLASSROOM_EXTRACTOR,
+    { timeoutMs: 18000, expectHost: 'classroom.google.com' }
+  );
+});
+
+// ログイン済みセッションを使って、所属している Slack ワークスペース一覧を検出する。
+// slack.com/signin はログイン済みブラウザだと「サインインできるワークスペース一覧」
+// （各行に名前・人数・最終サインイン日、開く先は https://<sub>.slack.com）を出すので、
+// その一覧の各ワークスペースの URL と名前を読み取る。
+// slack.com/signin（ログイン済み）には、このブラウザでサインイン済みのワークスペースが
+// 「<名前><sub>.slack.com開く」という行で並ぶ。各行のリンク（https://<sub>.slack.com/...）
+// から URL を、親要素のテキストからドメインと「開く」を除いて名前を取り出す。
+const SLACK_EXTRACTOR = `(() => {
+  try {
+    const out = [];
+    const seen = new Set();
+    const GENERIC = ['www','app','api','my','get-started','slack','status','slackhq','help','files','files-origin','edgeapi','signin'];
+    for (const a of document.querySelectorAll('a[href]')) {
+      const href = a.getAttribute('href') || '';
+      const m = href.match(/^https?:\\/\\/([a-z0-9-]+)\\.slack\\.com/i);
+      if (!m) continue;
+      const sub = m[1].toLowerCase();
+      if (GENERIC.includes(sub) || seen.has(sub)) continue;
+      const domain = sub + '.slack.com';
+      let name = (a.parentElement ? a.parentElement.textContent : '' || '')
+        .replace(/\\s+/g, ' ')
+        .trim();
+      // ドメイン文字列と「開く / Open / Launch」を取り除いて名前だけにする
+      name = name
+        .replace(new RegExp(domain.replace(/[.]/g, '\\\\.'), 'ig'), '')
+        .replace(/開く|を開く|Open|Launch/gi, '')
+        .trim();
+      if (!name || name.length > 60) name = sub;
+      seen.add(sub);
+      out.push({ url: 'https://' + domain, name });
+    }
+    return out.slice(0, 30);
+  } catch (e) { return []; }
+})()`;
+
+ipcMain.handle('scrape-slack-workspaces', async () => {
+  return scrapeInHiddenWindow(
+    'https://slack.com/signin',
+    SLACK_EXTRACTOR,
+    // signin ページ自体を読むので、URL の "signin" による未ログイン誤判定を無効化
+    { timeoutMs: 15000, loginCheck: false }
+  );
+});
+
+// Google Calendar は別プロセスの隠しウィンドウだと製品紹介ページへ飛ばされる
+// 環境があるため、renderer 側で「実際に表示中のカレンダー webview」から
+// 直接読み取る方式（ServiceFrame / CalendarCard）に変更した。
+
 // 座標→地名（逆ジオコーディング、日本語）。OS 位置情報の表示名に使う。
 ipcMain.handle('reverse-geocode', async (_event, lat: number, lon: number) => {
   try {
@@ -697,6 +891,16 @@ function buildAppMenu() {
           label: '前のサービス',
           accelerator: 'CmdOrCtrl+Shift+[',
           click: () => send('menu:prev-service'),
+        },
+      ],
+    },
+    {
+      label: 'ヘルプ',
+      submenu: [
+        {
+          label: 'キーボードショートカット',
+          accelerator: 'CmdOrCtrl+/',
+          click: () => send('menu:shortcuts'),
         },
       ],
     },

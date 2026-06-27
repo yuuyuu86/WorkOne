@@ -9,12 +9,19 @@ import { SettingsView } from './components/SettingsView';
 import { AddServiceModal } from './components/AddServiceModal';
 import { CommandPalette } from './components/CommandPalette';
 import { ShortcutsModal } from './components/ShortcutsModal';
+import { WelcomeOverlay } from './components/WelcomeOverlay';
+import { TourOverlay } from './components/TourOverlay';
 import { UpdateBanner } from './components/UpdateBanner';
 import { useAppStore } from './store/useAppStore';
 import { isWithinDnd } from './lib/dnd';
 
 export default function App() {
   const activeView = useAppStore((s) => s.activeView);
+  const onboarded = useAppStore((s) => s.onboarded);
+  const setOnboarded = useAppStore((s) => s.setOnboarded);
+  const tourSeen = useAppStore((s) => s.tourSeen);
+  const setTourSeen = useAppStore((s) => s.setTourSeen);
+  const [showTour, setShowTour] = useState(false);
   const theme = useAppStore((s) => s.theme);
   const sidebarAutoHide = useAppStore((s) => s.sidebarAutoHide);
   const dndEnabled = useAppStore((s) => s.dndEnabled);
@@ -25,6 +32,15 @@ export default function App() {
   const [showShortcuts, setShowShortcuts] = useState(false);
   // 自動非表示時に、左端ホバーでサイドバーを一時表示
   const [sidebarRevealed, setSidebarRevealed] = useState(false);
+
+  // 既存ユーザー（すでにサービスがある）には初回オンボーディングを出さない
+  useEffect(() => {
+    if (!onboarded && useAppStore.getState().services.length > 0) {
+      setOnboarded(true);
+    }
+    // 初回のみ判定
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // 外観テーマを <html data-theme> に反映（system は OS 設定に追従）
   useEffect(() => {
@@ -59,11 +75,14 @@ export default function App() {
       setShowShortcuts((v) => !v);
     };
     const onShow = () => setShowShortcuts(true);
+    const onShowTour = () => setShowTour(true);
     window.addEventListener('keydown', onKey);
     window.addEventListener('md:show-shortcuts', onShow);
+    window.addEventListener('md:show-tour', onShowTour);
     return () => {
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('md:show-shortcuts', onShow);
+      window.removeEventListener('md:show-tour', onShowTour);
     };
   }, []);
 
@@ -91,6 +110,9 @@ export default function App() {
           break;
         case 'search':
           setShowSearch(true);
+          break;
+        case 'shortcuts':
+          setShowShortcuts(true);
           break;
         case 'settings':
           store.setView('settings');
@@ -172,6 +194,7 @@ export default function App() {
       <Sidebar
         onOpenAdd={() => setShowAdd(true)}
         onOpenSearch={() => setShowSearch(true)}
+        onOpenShortcuts={() => setShowShortcuts(true)}
         onMouseLeave={
           sidebarAutoHide ? () => setSidebarRevealed(false) : undefined
         }
@@ -188,6 +211,22 @@ export default function App() {
       {showSearch && <CommandPalette onClose={() => setShowSearch(false)} />}
       {showShortcuts && (
         <ShortcutsModal onClose={() => setShowShortcuts(false)} />
+      )}
+      {!onboarded && (
+        <WelcomeOverlay
+          onDone={() => {
+            setOnboarded(true);
+            if (!tourSeen) setShowTour(true);
+          }}
+        />
+      )}
+      {showTour && (
+        <TourOverlay
+          onClose={() => {
+            setShowTour(false);
+            setTourSeen(true);
+          }}
+        />
       )}
     </div>
   );

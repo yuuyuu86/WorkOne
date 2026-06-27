@@ -65,6 +65,7 @@ const api = {
       'menu:view-readlater',
       'menu:next-service',
       'menu:prev-service',
+      'menu:shortcuts',
     ];
     const pairs = channels.map((ch) => {
       const handler = () => cb(ch.replace('menu:', ''));
@@ -76,6 +77,23 @@ const api = {
 
   /** プラットフォーム情報（UI 微調整用） */
   platform: process.platform,
+
+  /** ログイン済みセッションを使って Classroom の課題を読み取る（DOM 取得）。 */
+  scrapeClassroom: (): Promise<{
+    ok: boolean;
+    loginRequired: boolean;
+    unavailable: boolean;
+    items: { title: string; href: string; due: string; course: string }[];
+  }> => ipcRenderer.invoke('scrape-classroom'),
+
+  /** ログイン済みセッションを使って、所属している Slack ワークスペース一覧を検出する。 */
+  scrapeSlackWorkspaces: (): Promise<{
+    ok: boolean;
+    loginRequired: boolean;
+    unavailable: boolean;
+    items: { url: string; name: string }[];
+  }> => ipcRenderer.invoke('scrape-slack-workspaces'),
+
 };
 
 contextBridge.exposeInMainWorld('workOne', api);

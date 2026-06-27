@@ -9,6 +9,7 @@ import {
   FiSearch,
   FiChevronDown,
   FiChevronRight,
+  FiHelpCircle,
 } from 'react-icons/fi';
 import { useAppStore, type ViewKey } from '../store/useAppStore';
 import {
@@ -22,11 +23,17 @@ import { ServiceIcon } from './ServiceIcon';
 type Props = {
   onOpenAdd: () => void;
   onOpenSearch: () => void;
+  onOpenShortcuts: () => void;
   /** 自動非表示のとき、サイドバーから離れたら隠す */
   onMouseLeave?: () => void;
 };
 
-export function Sidebar({ onOpenAdd, onOpenSearch, onMouseLeave }: Props) {
+export function Sidebar({
+  onOpenAdd,
+  onOpenSearch,
+  onOpenShortcuts,
+  onMouseLeave,
+}: Props) {
   const sidebarWidth = useAppStore((s) => s.sidebarWidth);
   const setSidebarWidth = useAppStore((s) => s.setSidebarWidth);
   const activeView = useAppStore((s) => s.activeView);
@@ -244,7 +251,11 @@ export function Sidebar({ onOpenAdd, onOpenSearch, onMouseLeave }: Props) {
         <h1>WorkOne</h1>
       </div>
 
-      <button className="nav-item" onClick={onOpenSearch}>
+      <button
+        className="nav-item"
+        onClick={onOpenSearch}
+        data-tour="search"
+      >
         <span className="nav-icon">
           <FiSearch size={16} />
         </span>
@@ -252,54 +263,73 @@ export function Sidebar({ onOpenAdd, onOpenSearch, onMouseLeave }: Props) {
         <span className="nav-badge">⌘K</span>
       </button>
 
-      {navItem('today', 'Home', <FiHome size={16} />)}
-      {navItem(
-        'inbox',
-        'Inbox',
-        <FiInbox size={16} />,
-        unreadNotifications ? String(unreadNotifications) : undefined
-      )}
-      {navItem(
-        'readLater',
-        'あとで見る',
-        <FiBookmark size={16} />,
-        readLater.length ? String(readLater.length) : undefined
-      )}
-      {navItem(
-        'focus',
-        '集中モード',
-        <FiTarget size={16} />,
-        focusMode !== 'normal' ? 'ON' : undefined
-      )}
+      <div data-tour="nav-views">
+        {navItem('today', 'Home', <FiHome size={16} />)}
+        {navItem(
+          'inbox',
+          'Inbox',
+          <FiInbox size={16} />,
+          unreadNotifications ? String(unreadNotifications) : undefined
+        )}
+        {navItem(
+          'readLater',
+          'あとで見る',
+          <FiBookmark size={16} />,
+          readLater.length ? String(readLater.length) : undefined
+        )}
+      </div>
+      <div data-tour="focus-mode">
+        {navItem(
+          'focus',
+          '集中モード',
+          <FiTarget size={16} />,
+          focusMode !== 'normal' ? 'ON' : undefined
+        )}
+      </div>
 
       <div className="sidebar-section-label">マイサービス</div>
-      {focusMode === 'deep' ? (
-        <div className="sidebar-empty">
-          完全集中モード中はサービス一覧を非表示にしています。
-        </div>
-      ) : visibleServices.length === 0 ? (
-        <div className="sidebar-empty">
-          {services.length === 0
-            ? '「サービスを追加」からGmailやSlackなどを追加できます。'
-            : '集中モードで表示するサービスが選択されていません。'}
-        </div>
-      ) : sidebarGrouped ? (
-        renderGrouped()
-      ) : (
-        renderServiceList(visibleServices)
-      )}
+      <div data-tour="services">
+        {focusMode === 'deep' ? (
+          <div className="sidebar-empty">
+            完全集中モード中はサービス一覧を非表示にしています。
+          </div>
+        ) : visibleServices.length === 0 ? (
+          <div className="sidebar-empty">
+            {services.length === 0
+              ? '「サービスを追加」からGmailやSlackなどを追加できます。'
+              : '集中モードで表示するサービスが選択されていません。'}
+          </div>
+        ) : sidebarGrouped ? (
+          renderGrouped()
+        ) : (
+          renderServiceList(visibleServices)
+        )}
+      </div>
 
       <div style={{ flex: 1 }} />
 
       <div style={{ marginTop: 12 }}>
-        <button className="nav-item" onClick={onOpenAdd}>
+        <button
+          className="nav-item"
+          onClick={onOpenAdd}
+          data-tour="add-service"
+        >
           <span className="nav-icon">
             <FiPlus size={16} />
           </span>
           <span className="nav-label">サービスを追加</span>
         </button>
       </div>
-      {navItem('settings', '設定', <FiSettings size={16} />)}
+      <div data-tour="settings">
+        {navItem('settings', '設定', <FiSettings size={16} />)}
+      </div>
+      <button className="nav-item" onClick={onOpenShortcuts}>
+        <span className="nav-icon">
+          <FiHelpCircle size={16} />
+        </span>
+        <span className="nav-label">ショートカット</span>
+        <span className="nav-badge">?</span>
+      </button>
 
       <div
         className={`sidebar-resizer ${resizing ? 'active' : ''}`}

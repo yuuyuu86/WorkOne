@@ -16,7 +16,7 @@ const GROUPS: { title: string; items: [string, string][] }[] = [
       ['検索（コマンドパレット）', `${MOD} + K`],
       ['サービスを追加', `${MOD} + N`],
       ['設定', `${MOD} + ,`],
-      ['ショートカット一覧', '?'],
+      ['ショートカット一覧', `${MOD} + /（または ?）`],
     ],
   },
   {
@@ -57,6 +57,16 @@ export function ShortcutsModal({ onClose }: Props) {
           </button>
         </div>
         <div className="modal-body">
+          <button
+            className="btn btn-block"
+            style={{ marginBottom: 20 }}
+            onClick={() => {
+              onClose();
+              window.dispatchEvent(new CustomEvent('md:show-tour'));
+            }}
+          >
+            使い方ツアーを見る
+          </button>
           {GROUPS.map((g) => (
             <div key={g.title} className="section" style={{ marginBottom: 20 }}>
               <h3 className="section-title">{g.title}</h3>

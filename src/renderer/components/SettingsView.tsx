@@ -645,6 +645,14 @@ export function SettingsView() {
             >
               ショートカット一覧（?）
             </button>
+            <button
+              className="btn btn-sm"
+              onClick={() =>
+                window.dispatchEvent(new CustomEvent('md:show-tour'))
+              }
+            >
+              使い方ツアーを見る
+            </button>
             {updateMsg && (
               <span className="muted" style={{ marginLeft: 2 }}>
                 {updateMsg}

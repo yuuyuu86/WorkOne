@@ -53,6 +53,44 @@ const GMAIL_FEED_SCRIPT = `(async () => {
   } catch (e) { return { error: String(e) }; }
 })();`;
 
+// 表示中の Google Calendar webview から、data-eventid を持つ全イベントの
+// aria-label を集める（日表示なら全部今日の予定）。CalendarCard 側で今日分に絞る。
+// 表示中の Google カレンダー webview から予定チップの aria-label を集める。
+// 月/週/日いずれの表示でも拾えるよう、複数のソースから広く集める：
+//  1) data-eventid を持つ予定チップ
+//  2) role=button で時刻/日付/終日を含むもの
+//  3) グリッド本体内の aria-label で時刻/日付/終日を含むもの
+// aria-label には「2026年 6月 27日」「午後7時～」が入るので CalendarCard 側で今日分に絞る。
+const CALENDAR_EXTRACT = `(() => {
+  try {
+    const seen = new Set();
+    const all = [];
+    const eventLike = /午前|午後|\\d{1,2}:\\d{2}|終日|\\d{1,2}\\s*月\\s*\\d{1,2}\\s*日/;
+    const push = (lab) => {
+      lab = (lab || '').replace(/\\s+/g, ' ').trim();
+      if (!lab || lab.length < 2 || lab.length > 300 || seen.has(lab)) return;
+      seen.add(lab);
+      all.push(lab);
+    };
+    // 予定チップは aria-label が空でテキストにしか情報が無い場合があるため両方見る。
+    for (const el of document.querySelectorAll('[data-eventid]')) {
+      push(el.getAttribute('aria-label') || el.textContent);
+    }
+    for (const el of document.querySelectorAll('[role="button"]')) {
+      const lab = el.getAttribute('aria-label') || el.textContent || '';
+      if (eventLike.test(lab)) push(lab);
+    }
+    const grid = document.querySelector('[role="grid"],[role="main"]');
+    if (grid) {
+      for (const el of grid.querySelectorAll('[aria-label]')) {
+        const lab = el.getAttribute('aria-label') || '';
+        if (eventLike.test(lab)) push(lab);
+      }
+    }
+    return { all: all.slice(0, 200) };
+  } catch (e) { return { all: [] }; }
+})()`;
+
 /**
  * 1 サービス分の <webview> + ツールバー。
  * 一度マウントされたら背景でも生かしておき（display で出し分け）、
@@ -430,6 +468,91 @@ export function ServiceFrame({ service, isActive }: Props) {
     };
   }, [isGmail, pollGmail]);
 
+  // Google Calendar の webview から「今日の予定」を読み取るブリッジ。
+  // 裏（カバー中）の webview では時刻つき予定グリッドが完全に描画されないことが
+  // あるため、カレンダーが前面に出たとき（＝確実に全描画される）にも自動抽出して
+  // ストアへキャッシュし、Home はそのキャッシュを表示する。各予定の aria-label に
+  // 入る「2026年 6月 27日」を CalendarCard 側で今日分に絞る（終日・時刻つき問わず）。
+  const isCalendar = host === 'calendar.google.com';
+  useEffect(() => {
+    if (!isCalendar) return;
+
+    const extract = async (): Promise<string[]> => {
+      const w = webviewRef.current;
+      if (!w || typeof w.executeJavaScript !== 'function') return [];
+      try {
+        const r = await w.executeJavaScript(CALENDAR_EXTRACT, false);
+        return Array.isArray(r?.all) ? r.all : [];
+      } catch {
+        return [];
+      }
+    };
+
+    // 再取得リクエストへの応答。ただしキャッシュ上書きは「前面のとき」だけ行う。
+    // 裏の webview は他の日のセルなどを拾い、今日分0件の貧弱な結果で良いキャッシュを
+    // 壊すことがあるため。前面なら今日の予定も確実に描画されている。
+    const onReq = async () => {
+      let all = await extract();
+      if (all.length === 0) {
+        await new Promise((r) => setTimeout(r, 1500));
+        all = await extract();
+      }
+      if (isActiveRef.current && all.length > 0) {
+        useAppStore.getState().setCalendarRaw(all);
+      }
+      window.dispatchEvent(
+        new CustomEvent('md:calendar-result', { detail: { ok: true, all } })
+      );
+    };
+
+    window.addEventListener('md:calendar-request', onReq);
+    return () => {
+      window.removeEventListener('md:calendar-request', onReq);
+    };
+  }, [isCalendar]);
+
+  // カレンダーが前面に出ているあいだに今日の予定を抽出してストアへキャッシュする。
+  // 表示の切り替えはユーザー操作を尊重して行わない（日表示なら終日も時刻つきも取れる）。
+  // 描画タイミングのブレに備え、数秒かけて複数回抽出し、結果をマージして書き込む。
+  useEffect(() => {
+    if (!isCalendar || !isActive) return;
+    let stopped = false;
+
+    const extractOnce = async (): Promise<string[]> => {
+      const w = webviewRef.current;
+      if (!w || typeof w.executeJavaScript !== 'function') return [];
+      try {
+        const r = await w.executeJavaScript(CALENDAR_EXTRACT, false);
+        return Array.isArray(r?.all) ? r.all : [];
+      } catch {
+        return [];
+      }
+    };
+
+    // 短い間隔で複数回抽出。各回ごとに即キャッシュ更新（途中で Home に戻っても、
+    // それまでに取れた分は残る）。
+    const merged = new Set<string>();
+    const tick = async () => {
+      if (stopped) return;
+      const got = await extractOnce();
+      if (stopped) return;
+      for (const lab of got) merged.add(lab);
+      if (merged.size > 0) useAppStore.getState().setCalendarRaw([...merged]);
+    };
+
+    // 1秒後から短い間隔で複数回抽出（描画タイミングのブレを吸収）
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    [1000, 2200, 3400, 4600, 6000].forEach((d) =>
+      timers.push(setTimeout(tick, d))
+    );
+    const refresh = setInterval(tick, 90000);
+    return () => {
+      stopped = true;
+      timers.forEach(clearTimeout);
+      clearInterval(refresh);
+    };
+  }, [isCalendar, isActive]);
+
   // 開いた瞬間に即時更新（60 秒待たずに未読を反映）
   useEffect(() => {
     if (isGmail && isActive) pollGmail();
@@ -552,7 +675,7 @@ export function ServiceFrame({ service, isActive }: Props) {
         pointerEvents: isActive ? 'auto' : 'none',
       }}
     >
-      <div className="service-toolbar">
+      <div className="service-toolbar" data-tour="service-toolbar">
         <button
           className="icon-btn"
           title="戻る"
@@ -654,6 +777,9 @@ export function ServiceFrame({ service, isActive }: Props) {
           src={initialSrc}
           partition={SHARED_PARTITION}
           useragent={CHROME_USER_AGENT}
+          // 裏（display:none）でも描画を止めない。Google カレンダーの時刻つき
+          // 予定グリッドは描画が止まると DOM に出ないため、読み取りに必要。
+          webpreferences="backgroundThrottling=no"
           {...({ allowpopups: 'true' } as Record<string, string>)}
         />
         {failed && (

@@ -44,6 +44,13 @@ export function parseUnreadCount(title: string, hostname?: string): number {
     if (Number.isFinite(n) && n <= MAX_REASONABLE) return n;
   }
 
+  // 先頭マーカーの直後に数値が続く形式（Slack 等: "● 3 ワークスペース名"）
+  const markerNum = t.match(/^\s*[•*●∙·🔴]\s*(\d{1,5})\b/);
+  if (markerNum) {
+    const n = parseInt(markerNum[1], 10);
+    if (Number.isFinite(n) && n <= MAX_REASONABLE) return n;
+  }
+
   // 件数なしの未読マーカー（先頭の中黒・アスタリスク・●など）→ 1 件あり
   if (/^\s*[•*●∙·🔴]/.test(t)) return 1;
 

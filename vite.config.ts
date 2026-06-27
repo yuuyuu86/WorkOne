@@ -32,6 +32,16 @@ export default defineConfig({
         vite: {
           build: {
             outDir: resolve(__dirname, 'dist-electron'),
+            // preload は ESM の .mjs として出力する。
+            // package.json が "type": "module" のため、preload を .js にすると
+            // Electron は CJS として読もうとして import 文で失敗し、
+            // window.workOne が undefined になる。.mjs なら ESM preload として
+            // 正しく読み込まれる（Electron 28+ / 本プロジェクトは 31）。
+            rollupOptions: {
+              output: {
+                entryFileNames: 'preload.mjs',
+              },
+            },
           },
         },
       },

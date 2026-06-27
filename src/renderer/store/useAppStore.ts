@@ -46,6 +46,26 @@ type AppState = {
   autoloadServices: boolean;
   /** 新着通知のときにアプリ内で音を鳴らす（既定 OFF） */
   notificationSound: boolean;
+  /** カレンダー webview から最後に取得できた予定の生ラベル（Home 表示用キャッシュ） */
+  calendarRaw: string[];
+  /** カレンダー生ラベルを取得した時刻（ms） */
+  calendarRawAt: number;
+  setCalendarRaw: (labels: string[]) => void;
+  /** Classroom から最後に取得できた課題一覧（コマンドパレット検索/通知用キャッシュ） */
+  classroomItems: { title: string; href: string; due: string; course: string }[];
+  setClassroomItems: (
+    items: { title: string; href: string; due: string; course: string }[]
+  ) => void;
+  /** Home ウィジェットの並び順（全 ID。表示/非表示問わず順序を保持） */
+  homeWidgetOrder: string[];
+  /** 非表示にした Home ウィジェットの ID */
+  homeWidgetHidden: string[];
+  /** Home ウィジェットの幅（'full'=全幅 / 'half'=半幅）。未指定は full */
+  homeWidgetWidth: Record<string, 'full' | 'half'>;
+  setHomeWidgetOrder: (order: string[]) => void;
+  toggleHomeWidgetHidden: (id: string) => void;
+  setHomeWidgetWidth: (id: string, w: 'full' | 'half') => void;
+  resetHomeWidgets: () => void;
   /** 通知をミュートするサービス ID（OS 通知を出さない） */
   mutedServices: string[];
   /** 重要サービス ID（重要グループ・集中モードでも通知） */
@@ -77,6 +97,10 @@ type AppState = {
   dndActive: boolean;
   /** サービスごとのズーム倍率（Electron zoomLevel、永続化） */
   serviceZoom: Record<string, number>;
+  /** 初回ウェルカム/オンボーディングを表示済みか */
+  onboarded: boolean;
+  /** 使い方ツアー（スポットライト解説）を表示済みか */
+  tourSeen: boolean;
 
   // 揮発（UI ナビゲーション・未読バッジ）
   activeView: ViewKey;
@@ -106,6 +130,8 @@ type AppState = {
   setDndWindow: (start: string, end: string) => void;
   setDndActive: (active: boolean) => void;
   setServiceZoom: (id: string, zoom: number) => void;
+  setOnboarded: (done: boolean) => void;
+  setTourSeen: (done: boolean) => void;
   /** 設定をエクスポート（JSON 文字列） */
   exportSettings: () => string;
   /** 設定をインポート（成功で true） */
@@ -181,6 +207,17 @@ try {
   /* 失敗時は新規 */
 }
 
+// Home ウィジェットの既定の並び順（新規ユーザー・リセット時）
+export const DEFAULT_HOME_WIDGETS = [
+  'stats',
+  'notifications',
+  'calendar',
+  'classroom',
+  'frequent',
+  'readLater',
+  'focus',
+];
+
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
@@ -196,6 +233,12 @@ export const useAppStore = create<AppState>()(
       notificationsEnabled: false,
       autoloadServices: true,
       notificationSound: false,
+      calendarRaw: [],
+      calendarRawAt: 0,
+      classroomItems: [],
+      homeWidgetOrder: [...DEFAULT_HOME_WIDGETS],
+      homeWidgetHidden: [],
+      homeWidgetWidth: {},
       mutedServices: [],
       importantServices: [],
       historyEnabled: true,
@@ -213,6 +256,8 @@ export const useAppStore = create<AppState>()(
       dndEnd: '07:00',
       dndActive: false,
       serviceZoom: {},
+      onboarded: false,
+      tourSeen: false,
 
       activeView: 'today',
       activeServiceId: null,
@@ -226,6 +271,24 @@ export const useAppStore = create<AppState>()(
 
       setAutoloadServices: (enabled) => set({ autoloadServices: enabled }),
       setNotificationSound: (enabled) => set({ notificationSound: enabled }),
+      setCalendarRaw: (labels) =>
+        set({ calendarRaw: labels, calendarRawAt: Date.now() }),
+      setClassroomItems: (items) => set({ classroomItems: items }),
+      setHomeWidgetOrder: (order) => set({ homeWidgetOrder: order }),
+      toggleHomeWidgetHidden: (id) =>
+        set((s) => ({
+          homeWidgetHidden: s.homeWidgetHidden.includes(id)
+            ? s.homeWidgetHidden.filter((x) => x !== id)
+            : [...s.homeWidgetHidden, id],
+        })),
+      setHomeWidgetWidth: (id, w) =>
+        set((s) => ({ homeWidgetWidth: { ...s.homeWidgetWidth, [id]: w } })),
+      resetHomeWidgets: () =>
+        set({
+          homeWidgetOrder: [...DEFAULT_HOME_WIDGETS],
+          homeWidgetHidden: [],
+          homeWidgetWidth: {},
+        }),
 
       setHistoryEnabled: (enabled) => set({ historyEnabled: enabled }),
       setWeatherEnabled: (enabled) => set({ weatherEnabled: enabled }),
@@ -252,6 +315,8 @@ export const useAppStore = create<AppState>()(
         if ((get().serviceZoom[id] ?? 0) === zoom) return;
         set({ serviceZoom: { ...get().serviceZoom, [id]: zoom } });
       },
+      setOnboarded: (done) => set({ onboarded: done }),
+      setTourSeen: (done) => set({ tourSeen: done }),
 
       exportSettings: () => {
         const s = get();
@@ -616,6 +681,12 @@ export const useAppStore = create<AppState>()(
         notificationsEnabled: state.notificationsEnabled,
         autoloadServices: state.autoloadServices,
         notificationSound: state.notificationSound,
+        calendarRaw: state.calendarRaw,
+        calendarRawAt: state.calendarRawAt,
+        classroomItems: state.classroomItems,
+        homeWidgetOrder: state.homeWidgetOrder,
+        homeWidgetHidden: state.homeWidgetHidden,
+        homeWidgetWidth: state.homeWidgetWidth,
         historyEnabled: state.historyEnabled,
         history: state.history,
         weatherEnabled: state.weatherEnabled,
@@ -629,6 +700,8 @@ export const useAppStore = create<AppState>()(
         dndStart: state.dndStart,
         dndEnd: state.dndEnd,
         serviceZoom: state.serviceZoom,
+        onboarded: state.onboarded,
+        tourSeen: state.tourSeen,
         mutedServices: state.mutedServices,
         importantServices: state.importantServices,
       }),
