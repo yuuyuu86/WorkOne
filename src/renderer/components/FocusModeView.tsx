@@ -1,23 +1,32 @@
-import { FiTarget } from 'react-icons/fi';
+import type { IconType } from 'react-icons';
+import { FiGrid, FiTarget, FiMoon } from 'react-icons/fi';
 import { useAppStore } from '../store/useAppStore';
 import type { FocusMode } from '../types/service';
 import { ServiceIcon } from './ServiceIcon';
 
-const MODES: { key: FocusMode; label: string; desc: string }[] = [
+const MODES: {
+  key: FocusMode;
+  label: string;
+  desc: string;
+  Icon: IconType;
+}[] = [
   {
     key: 'normal',
     label: '通常モード',
     desc: '追加済みのすべてのサービスをサイドバーに表示します。',
+    Icon: FiGrid,
   },
   {
     key: 'focus',
     label: '集中モード',
     desc: '下で選んだサービスだけをサイドバーに表示します。',
+    Icon: FiTarget,
   },
   {
     key: 'deep',
     label: '完全集中モード',
     desc: 'サービス一覧を隠し、Home・Inbox・あとで見る・設定だけを表示します。',
+    Icon: FiMoon,
   },
 ];
 
@@ -56,7 +65,7 @@ export function FocusModeView() {
                   focusMode === m.key ? 'var(--accent-soft)' : 'var(--panel-bg)',
               }}
             >
-              <FiTarget
+              <m.Icon
                 size={20}
                 style={{
                   color:

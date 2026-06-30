@@ -145,27 +145,32 @@ textarea {
 }
 
 .sidebar-header {
-  padding: 38px 8px 14px;
+  padding: 38px 8px 16px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   -webkit-app-region: drag;
 }
 
 .sidebar-header .logo-mark {
+  /* ドラッグ領域内でもクリックを拾えるようにする（ロゴ連打の小ネタ用） */
+  -webkit-app-region: no-drag;
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 7px;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
   background: var(--accent);
   color: #fff;
 }
 
 .sidebar-header h1 {
-  font-size: 15px;
-  font-weight: 600;
+  -webkit-app-region: no-drag;
+  cursor: pointer;
+  font-size: 19px;
+  font-weight: 700;
   margin: 0;
   letter-spacing: -0.01em;
 }
@@ -229,6 +234,17 @@ textarea {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+}
+
+.unread-badge.bump {
+  animation: badge-bounce 0.5s ease;
+}
+
+@keyframes badge-bounce {
+  0% { transform: scale(1); }
+  30% { transform: scale(1.45); }
+  60% { transform: scale(0.9); }
+  100% { transform: scale(1); }
 }
 
 .nav-item.active .unread-badge {
@@ -336,6 +352,16 @@ textarea {
   padding: 32px 40px 48px;
 }
 
+/* Homeのウィジェットエリアだけに背景画像を適用する（ヘッダーは除外） */
+.home-bg-area {
+  margin: 0 -40px -48px;
+  padding: 0 40px 48px;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  min-height: 200px;
+}
+
 .page-header {
   margin-bottom: 24px;
 }
@@ -360,9 +386,61 @@ textarea {
 /* ---------- Home ウィジェット ---------- */
 .home-toolbar {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: 8px;
   margin-bottom: 16px;
+}
+
+/* Home 編集ツールバー内の背景の暗さスライダー */
+.home-bg-dim-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  color: var(--text-secondary);
+}
+
+.home-bg-dim-control input[type='range'] {
+  width: 90px;
+}
+
+/* 「編集」ボタンの初回ヒント（吹き出し） */
+.home-edit-hint {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12.5px;
+  line-height: 1.5;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  width: 220px;
+}
+
+.home-edit-hint .icon-btn-sm {
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.home-edit-hint .icon-btn-sm:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.home-edit-hint-arrow {
+  position: absolute;
+  top: -5px;
+  right: 16px;
+  width: 10px;
+  height: 10px;
+  background: var(--accent);
+  transform: rotate(45deg);
 }
 
 .home-grid {
@@ -697,25 +775,6 @@ textarea {
   width: 100%;
   height: 100%;
   border: none;
-}
-
-/* 読み込み中インジケータ（上部の不定プログレスバー） */
-.loading-bar {
-  position: absolute;
-  top: 0;
-  left: 0;
-  height: 3px;
-  width: 30%;
-  background: var(--accent);
-  z-index: 4;
-  border-radius: 0 2px 2px 0;
-  animation: loading-slide 1.1s ease-in-out infinite;
-}
-
-@keyframes loading-slide {
-  0% { left: -30%; width: 30%; }
-  50% { width: 45%; }
-  100% { left: 100%; width: 30%; }
 }
 
 @keyframes loading-spin {
@@ -1188,6 +1247,24 @@ textarea {
   opacity: 0;
 }
 
+/* ロゴ連打の小ネタ: 半透明の軽いオーバーレイで集約アニメだけ再生する */
+.logo-burst-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  animation: wl-overlay-in 0.25s ease;
+  transition: opacity 0.3s ease;
+}
+
+.logo-burst-overlay.welcome-closing {
+  opacity: 0;
+}
+
 @keyframes wl-overlay-in {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -1640,6 +1717,13 @@ textarea {
   color: var(--text-secondary);
   font-size: 13.5px;
   margin-top: 2px;
+}
+
+.today-hero .hero-note {
+  color: var(--accent);
+  font-size: 13px;
+  margin-top: 6px;
+  font-weight: 500;
 }
 
 .weather-card {

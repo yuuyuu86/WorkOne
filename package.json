@@ -1,6 +1,6 @@
 {
   "name": "workone",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "連絡・学校・予定系サービスをまとめて見るための連絡専用ブラウザー",
   "main": "dist-electron/main.js",
   "author": "WorkOne",

@@ -18,8 +18,8 @@ type Props = {
   onDone: () => void;
 };
 
-// アニメーションで中央へ集まるサービスアイコン
-const FLY_ICONS = [
+// アニメーションで中央へ集まるサービスアイコン（ロゴ連打の小ネタでも再利用する）
+export const FLY_ICONS = [
   'gmail',
   'slack',
   'calendar',

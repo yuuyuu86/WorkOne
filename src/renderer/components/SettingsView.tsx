@@ -16,6 +16,7 @@ import { confirmAction } from '../lib/confirm';
 import { SHARED_PARTITION } from '../lib/session';
 import { CustomServiceForm } from './CustomServiceForm';
 import { geocodeCity, getPreciseLocation, detectLocation } from '../lib/weather';
+import { fileToResizedDataUrl } from '../lib/image';
 
 export function SettingsView() {
   const [editing, setEditing] = useState<Service | null>(null);
@@ -41,6 +42,11 @@ export function SettingsView() {
   const setSidebarAutoHide = useAppStore((s) => s.setSidebarAutoHide);
   const sidebarGrouped = useAppStore((s) => s.sidebarGrouped);
   const setSidebarGrouped = useAppStore((s) => s.setSidebarGrouped);
+  const homeBackgroundImage = useAppStore((s) => s.homeBackgroundImage);
+  const setHomeBackgroundImage = useAppStore((s) => s.setHomeBackgroundImage);
+  const homeBackgroundDim = useAppStore((s) => s.homeBackgroundDim);
+  const setHomeBackgroundDim = useAppStore((s) => s.setHomeBackgroundDim);
+  const [bgMsg, setBgMsg] = useState('');
   const dndEnabled = useAppStore((s) => s.dndEnabled);
   const setDndEnabled = useAppStore((s) => s.setDndEnabled);
   const dndStart = useAppStore((s) => s.dndStart);
@@ -58,6 +64,24 @@ export function SettingsView() {
   useEffect(() => {
     (window as any).workOne?.appVersion?.().then(setAppVersion);
   }, []);
+
+  const handleBackgroundFile = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setBgMsg('読み込み中…');
+    try {
+      const dataUrl = await fileToResizedDataUrl(file);
+      setHomeBackgroundImage(dataUrl);
+      setBgMsg('設定しました');
+      setTimeout(() => setBgMsg(''), 2000);
+    } catch {
+      setBgMsg('画像を設定できませんでした');
+      setTimeout(() => setBgMsg(''), 3000);
+    }
+  };
 
   const handleCheckUpdate = async () => {
     const api = (window as any).workOne;
@@ -327,6 +351,76 @@ export function SettingsView() {
               </div>
             </span>
           </label>
+          <div className="check-row" style={{ gap: 12, alignItems: 'flex-start' }}>
+            <span className="grow">
+              Home の背景画像
+              <div className="muted" style={{ marginTop: 2 }}>
+                好きな画像を Home 画面の背景に設定できます。画像は端末内にのみ
+                保存されます。
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  marginTop: 8,
+                  flexWrap: 'wrap',
+                }}
+              >
+                <label className="btn btn-sm" style={{ cursor: 'pointer' }}>
+                  画像を選ぶ
+                  <input
+                    type="file"
+                    accept="image/*"
+                    style={{ display: 'none' }}
+                    onChange={handleBackgroundFile}
+                  />
+                </label>
+                {homeBackgroundImage && (
+                  <button
+                    className="btn btn-sm btn-ghost"
+                    onClick={() => setHomeBackgroundImage(null)}
+                  >
+                    <FiX size={13} /> 背景を解除
+                  </button>
+                )}
+                {bgMsg && <span className="muted">{bgMsg}</span>}
+              </div>
+              {homeBackgroundImage && (
+                <>
+                  <div
+                    style={{
+                      marginTop: 10,
+                      width: 160,
+                      height: 90,
+                      borderRadius: 8,
+                      overflow: 'hidden',
+                      border: '1px solid var(--border)',
+                      backgroundImage: `url(${homeBackgroundImage})`,
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center',
+                    }}
+                  />
+                  <div style={{ marginTop: 10, maxWidth: 280 }}>
+                    <label className="muted" style={{ fontSize: 12 }}>
+                      暗さ（文字の読みやすさ調整）
+                    </label>
+                    <input
+                      type="range"
+                      min={0}
+                      max={0.85}
+                      step={0.05}
+                      value={homeBackgroundDim}
+                      onChange={(e) =>
+                        setHomeBackgroundDim(Number(e.target.value))
+                      }
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+                </>
+              )}
+            </span>
+          </div>
         </div>
       </div>
 

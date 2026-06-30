@@ -3,7 +3,9 @@ import {
   FiHome,
   FiInbox,
   FiBookmark,
+  FiGrid,
   FiTarget,
+  FiMoon,
   FiPlus,
   FiSettings,
   FiSearch,
@@ -57,6 +59,40 @@ export function Sidebar({
   // id ベースで扱う（グループ表示でも崩れないように）。
   const [dragId, setDragId] = useState<string | null>(null);
   const canReorder = focusMode === 'normal';
+
+  // 小ネタ: 未読バッジが増えた瞬間だけ軽くバウンスさせる
+  const prevBadgesRef = useRef<Record<string, number>>({});
+  const [bumpedIds, setBumpedIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    const prev = prevBadgesRef.current;
+    const bumped = Object.entries(serviceBadges)
+      .filter(([id, count]) => count > 0 && count > (prev[id] ?? 0))
+      .map(([id]) => id);
+    prevBadgesRef.current = { ...serviceBadges };
+    if (bumped.length === 0) return;
+    setBumpedIds((s) => new Set([...s, ...bumped]));
+    const t = setTimeout(() => {
+      setBumpedIds((s) => {
+        const next = new Set(s);
+        bumped.forEach((id) => next.delete(id));
+        return next;
+      });
+    }, 500);
+    return () => clearTimeout(t);
+  }, [serviceBadges]);
+
+  // 小ネタ: ロゴを 1.2 秒以内に 5 回連打すると、ウェルカム集約アニメを再生する。
+  const logoClicksRef = useRef<number[]>([]);
+  const handleLogoClick = () => {
+    const now = Date.now();
+    const clicks = logoClicksRef.current.filter((t) => now - t < 1200);
+    clicks.push(now);
+    logoClicksRef.current = clicks;
+    if (clicks.length >= 5) {
+      logoClicksRef.current = [];
+      window.dispatchEvent(new CustomEvent('md:logo-burst'));
+    }
+  };
 
   // 右端ドラッグで横幅を変更
   const [resizing, setResizing] = useState(false);
@@ -131,7 +167,11 @@ export function Sidebar({
       <ServiceIcon iconKey={svc.icon} chip={sub ? 18 : 22} />
       <span className="nav-label">{svc.name}</span>
       {serviceBadges[svc.id] > 0 && (
-        <span className="unread-badge">{serviceBadges[svc.id]}</span>
+        <span
+          className={`unread-badge ${bumpedIds.has(svc.id) ? 'bump' : ''}`}
+        >
+          {serviceBadges[svc.id]}
+        </span>
       )}
     </button>
   );
@@ -244,9 +284,9 @@ export function Sidebar({
       style={{ width: sidebarWidth }}
       onMouseLeave={onMouseLeave}
     >
-      <div className="sidebar-header">
+      <div className="sidebar-header" onClick={handleLogoClick}>
         <span className="logo-mark">
-          <FiInbox size={15} />
+          <FiInbox size={19} />
         </span>
         <h1>WorkOne</h1>
       </div>
@@ -282,7 +322,13 @@ export function Sidebar({
         {navItem(
           'focus',
           '集中モード',
-          <FiTarget size={16} />,
+          focusMode === 'deep' ? (
+            <FiMoon size={16} />
+          ) : focusMode === 'focus' ? (
+            <FiTarget size={16} />
+          ) : (
+            <FiGrid size={16} />
+          ),
           focusMode !== 'normal' ? 'ON' : undefined
         )}
       </div>

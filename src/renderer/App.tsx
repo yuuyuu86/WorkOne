@@ -11,6 +11,7 @@ import { CommandPalette } from './components/CommandPalette';
 import { ShortcutsModal } from './components/ShortcutsModal';
 import { WelcomeOverlay } from './components/WelcomeOverlay';
 import { TourOverlay } from './components/TourOverlay';
+import { LogoBurstOverlay } from './components/LogoBurstOverlay';
 import { UpdateBanner } from './components/UpdateBanner';
 import { useAppStore } from './store/useAppStore';
 import { isWithinDnd } from './lib/dnd';
@@ -30,6 +31,7 @@ export default function App() {
   const [showAdd, setShowAdd] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [showLogoBurst, setShowLogoBurst] = useState(false);
   // 自動非表示時に、左端ホバーでサイドバーを一時表示
   const [sidebarRevealed, setSidebarRevealed] = useState(false);
 
@@ -76,13 +78,16 @@ export default function App() {
     };
     const onShow = () => setShowShortcuts(true);
     const onShowTour = () => setShowTour(true);
+    const onLogoBurst = () => setShowLogoBurst(true);
     window.addEventListener('keydown', onKey);
     window.addEventListener('md:show-shortcuts', onShow);
     window.addEventListener('md:show-tour', onShowTour);
+    window.addEventListener('md:logo-burst', onLogoBurst);
     return () => {
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('md:show-shortcuts', onShow);
       window.removeEventListener('md:show-tour', onShowTour);
+      window.removeEventListener('md:logo-burst', onLogoBurst);
     };
   }, []);
 
@@ -227,6 +232,9 @@ export default function App() {
             setTourSeen(true);
           }}
         />
+      )}
+      {showLogoBurst && (
+        <LogoBurstOverlay onDone={() => setShowLogoBurst(false)} />
       )}
     </div>
   );

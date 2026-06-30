@@ -145,7 +145,6 @@ export function ServiceFrame({ service, isActive }: Props) {
   }, []);
 
   const setServiceZoom = useAppStore((s) => s.setServiceZoom);
-  const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   // ズーム倍率はサービスごとに保存した値で初期化する
   const [zoom, setZoom] = useState(
@@ -307,10 +306,8 @@ export function ServiceFrame({ service, isActive }: Props) {
     };
 
     const onStartLoading = () => {
-      setLoading(true);
       setFailed(false);
     };
-    const onStopLoading = () => setLoading(false);
     // webview のレンダラーが落ちたら自動で再読み込みして復帰する
     const onCrashed = () => {
       try {
@@ -323,7 +320,6 @@ export function ServiceFrame({ service, isActive }: Props) {
       // -3 (ABORTED) はユーザー操作等による中断なので無視
       if (e?.isMainFrame === false) return;
       if (e?.errorCode && e.errorCode !== -3) setFailed(true);
-      setLoading(false);
     };
 
     const onConsole = (e: any) => {
@@ -356,7 +352,6 @@ export function ServiceFrame({ service, isActive }: Props) {
     wv.addEventListener('dom-ready', injectHook);
     wv.addEventListener('console-message', onConsole);
     wv.addEventListener('did-start-loading', onStartLoading);
-    wv.addEventListener('did-stop-loading', onStopLoading);
     wv.addEventListener('did-fail-load', onFailLoad);
     wv.addEventListener('crashed', onCrashed);
     wv.addEventListener('render-process-gone', onCrashed);
@@ -367,7 +362,6 @@ export function ServiceFrame({ service, isActive }: Props) {
       wv.removeEventListener('dom-ready', injectHook);
       wv.removeEventListener('console-message', onConsole);
       wv.removeEventListener('did-start-loading', onStartLoading);
-      wv.removeEventListener('did-stop-loading', onStopLoading);
       wv.removeEventListener('did-fail-load', onFailLoad);
       wv.removeEventListener('crashed', onCrashed);
       wv.removeEventListener('render-process-gone', onCrashed);
@@ -748,7 +742,6 @@ export function ServiceFrame({ service, isActive }: Props) {
       </div>
 
       <div className="webview-host">
-        {loading && !failed && <div className="loading-bar" />}
         {loginExpired && (
           <div className="login-expired-banner">
             <span className="grow">
@@ -777,9 +770,12 @@ export function ServiceFrame({ service, isActive }: Props) {
           src={initialSrc}
           partition={SHARED_PARTITION}
           useragent={CHROME_USER_AGENT}
-          // 裏（display:none）でも描画を止めない。Google カレンダーの時刻つき
-          // 予定グリッドは描画が止まると DOM に出ないため、読み取りに必要。
-          webpreferences="backgroundThrottling=no"
+          // Calendar だけ、裏でも描画を止めない（時刻つき予定の読み取りに必要）。
+          // 他サービスまで常時フル稼働にするとメモリ/CPU負荷が増え、レンダラーが
+          // 落ちて白画面になりやすくなるため、対象を Calendar に限定する。
+          {...(isCalendar
+            ? { webpreferences: 'backgroundThrottling=no' }
+            : {})}
           {...({ allowpopups: 'true' } as Record<string, string>)}
         />
         {failed && (
@@ -790,7 +786,6 @@ export function ServiceFrame({ service, isActive }: Props) {
               className="btn btn-primary"
               onClick={() => {
                 setFailed(false);
-                setLoading(true);
                 webviewRef.current?.reload?.();
               }}
             >

@@ -89,6 +89,12 @@ type AppState = {
   sidebarGrouped: boolean;
   /** 折りたたみ中のカテゴリ */
   collapsedCategories: string[];
+  /** Home の背景にする画像（data URL）。未設定なら null */
+  homeBackgroundImage: string | null;
+  /** 背景画像の上に重ねる暗さ（0〜1、文字の読みやすさ調整用） */
+  homeBackgroundDim: number;
+  setHomeBackgroundImage: (dataUrl: string | null) => void;
+  setHomeBackgroundDim: (dim: number) => void;
   /** おやすみ時間（DND）。指定時間帯は通知を出さない */
   dndEnabled: boolean;
   dndStart: string; // "HH:MM"
@@ -101,6 +107,9 @@ type AppState = {
   onboarded: boolean;
   /** 使い方ツアー（スポットライト解説）を表示済みか */
   tourSeen: boolean;
+  /** Home の「編集」ボタン（ウィジェットの並び替え）の初回ヒントを表示済みか */
+  homeEditHintSeen: boolean;
+  setHomeEditHintSeen: (seen: boolean) => void;
 
   // 揮発（UI ナビゲーション・未読バッジ）
   activeView: ViewKey;
@@ -249,8 +258,10 @@ export const useAppStore = create<AppState>()(
       theme: 'system',
       sidebarWidth: 248,
       sidebarAutoHide: false,
-      sidebarGrouped: true,
+      sidebarGrouped: false,
       collapsedCategories: [],
+      homeBackgroundImage: null,
+      homeBackgroundDim: 0.55,
       dndEnabled: false,
       dndStart: '22:00',
       dndEnd: '07:00',
@@ -258,6 +269,7 @@ export const useAppStore = create<AppState>()(
       serviceZoom: {},
       onboarded: false,
       tourSeen: false,
+      homeEditHintSeen: false,
 
       activeView: 'today',
       activeServiceId: null,
@@ -298,6 +310,9 @@ export const useAppStore = create<AppState>()(
         set({ sidebarWidth: Math.max(180, Math.min(420, Math.round(width))) }),
       setSidebarAutoHide: (enabled) => set({ sidebarAutoHide: enabled }),
       setSidebarGrouped: (enabled) => set({ sidebarGrouped: enabled }),
+      setHomeBackgroundImage: (dataUrl) =>
+        set({ homeBackgroundImage: dataUrl }),
+      setHomeBackgroundDim: (dim) => set({ homeBackgroundDim: dim }),
       toggleCategoryCollapsed: (category) => {
         const has = get().collapsedCategories.includes(category);
         set({
@@ -317,6 +332,7 @@ export const useAppStore = create<AppState>()(
       },
       setOnboarded: (done) => set({ onboarded: done }),
       setTourSeen: (done) => set({ tourSeen: done }),
+      setHomeEditHintSeen: (seen) => set({ homeEditHintSeen: seen }),
 
       exportSettings: () => {
         const s = get();
@@ -695,6 +711,8 @@ export const useAppStore = create<AppState>()(
         sidebarWidth: state.sidebarWidth,
         sidebarAutoHide: state.sidebarAutoHide,
         sidebarGrouped: state.sidebarGrouped,
+        homeBackgroundImage: state.homeBackgroundImage,
+        homeBackgroundDim: state.homeBackgroundDim,
         collapsedCategories: state.collapsedCategories,
         dndEnabled: state.dndEnabled,
         dndStart: state.dndStart,
@@ -702,6 +720,7 @@ export const useAppStore = create<AppState>()(
         serviceZoom: state.serviceZoom,
         onboarded: state.onboarded,
         tourSeen: state.tourSeen,
+        homeEditHintSeen: state.homeEditHintSeen,
         mutedServices: state.mutedServices,
         importantServices: state.importantServices,
       }),
