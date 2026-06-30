@@ -109,23 +109,5 @@
 
 ---
 
-## やらないこと（方針）
-
-連絡・学校・予定に専念するため、LINE / Notion / Canva / Figma / GitHub / AI ツール系には
-対応しません。パスワードの保存、本文の保存、自動ログインも行いません。
-
----
-
-## 開発・ソースからのビルド
-
-開発者向けの情報です。Node.js 18 以上（推奨 20+）が必要です。
-
-```bash
-npm install        # 依存関係のインストール
-npm run dev        # 開発モードで起動
-npm run build      # 型チェック + バンドル
-npm run dist       # 配布用に dmg を生成（release/ に出力）
-```
-
 技術スタック: Electron + React + TypeScript + Vite / 状態管理は zustand。
 ライセンス: MIT。
