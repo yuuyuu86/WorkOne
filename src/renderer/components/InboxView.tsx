@@ -11,6 +11,8 @@ import {
   FiCpu,
   FiRotateCcw,
   FiX,
+  FiLayers,
+  FiCheckCircle,
 } from 'react-icons/fi';
 import { useAppStore, profileOf } from '../store/useAppStore';
 import type { AppNotification } from '../types/service';
@@ -21,7 +23,7 @@ type Props = {
   onOpenAdd: () => void;
 };
 
-type Filter = 'open' | 'unread' | 'important' | 'snoozed' | 'done' | string; // string = serviceId
+type Filter = 'open' | 'unread' | 'important' | 'snoozed' | 'done';
 type Sort = 'priority' | 'newest';
 
 function timeAgo(iso: string): string {
@@ -88,6 +90,7 @@ export function InboxView({ onOpenAdd }: Props) {
 
   const [filter, setFilter] = useState<Filter>('open');
   const [sort, setSort] = useState<Sort>('priority');
+  const [serviceFilter, setServiceFilter] = useState('');
   const [allProfiles, setAllProfiles] = useState(false);
   const [cursor, setCursor] = useState(0);
   const [snoozeFor, setSnoozeFor] = useState<string | null>(null);
@@ -112,12 +115,12 @@ export function InboxView({ onOpenAdd }: Props) {
 
   const shown = useMemo(() => {
     const list = scoped.filter((n) => {
+      if (serviceFilter && n.serviceId !== serviceFilter) return false;
       if (filter === 'open') return isOpen(n);
       if (filter === 'unread') return isOpen(n) && !n.read;
       if (filter === 'important') return isOpen(n) && n.important;
       if (filter === 'snoozed') return !!n.snoozedUntil && !n.done;
-      if (filter === 'done') return !!n.done;
-      return isOpen(n) && n.serviceId === filter;
+      return !!n.done;
     });
     if (sort === 'priority' && filter !== 'done') {
       return [...list].sort(
@@ -125,7 +128,7 @@ export function InboxView({ onOpenAdd }: Props) {
       );
     }
     return list;
-  }, [scoped, filter, sort]);
+  }, [scoped, filter, sort, serviceFilter]);
 
   // 今日対応が必要な上位3件（未読・未完了をスコア順）
   const top3 = useMemo(
@@ -272,7 +275,7 @@ export function InboxView({ onOpenAdd }: Props) {
         )}
       </div>
       {n.score !== undefined && filter !== 'done' && (
-        <span className={`score-pill ${n.score >= 70 ? 'high' : n.score >= 50 ? 'mid' : ''}`} title="重要度">
+        <span className={`score-pill ${n.score >= 70 ? 'high' : n.score >= 50 ? 'mid' : ''}`} title="重要度スコア（0〜100）">
           {n.score}
         </span>
       )}
@@ -285,7 +288,7 @@ export function InboxView({ onOpenAdd }: Props) {
         {n.done || n.snoozedUntil ? (
           <button
             className="icon-btn"
-            title="受信箱に戻す"
+            title="受信箱に戻す（未処理に戻す）"
             onClick={() => {
               useAppStore.setState({
                 notifications: useAppStore
@@ -304,7 +307,7 @@ export function InboxView({ onOpenAdd }: Props) {
               <FiCheck size={14} />
             </button>
             <div style={{ position: 'relative' }}>
-              <button className="icon-btn" title="スヌーズ (s)" onClick={() => setSnoozeFor(n.id)}>
+              <button className="icon-btn" title="スヌーズ・あとで再表示 (s)" onClick={() => setSnoozeFor(n.id)}>
                 <FiClock size={14} />
               </button>
               {snoozeFor === n.id && (
@@ -323,7 +326,7 @@ export function InboxView({ onOpenAdd }: Props) {
                 </div>
               )}
             </div>
-            <button className="icon-btn" title="タスク化 (t)" onClick={() => setTaskFor(n)}>
+            <button className="icon-btn" title="タスクに追加 (t)" onClick={() => setTaskFor(n)}>
               <FiCheckSquare size={14} />
             </button>
             <button className="icon-btn" title="あとで見る (l)" onClick={() => toReadLater(n)}>
@@ -331,7 +334,7 @@ export function InboxView({ onOpenAdd }: Props) {
             </button>
           </>
         )}
-        <button className="icon-btn" title="削除 (#)" onClick={() => removeNotification(n.id)}>
+        <button className="icon-btn" title="通知を削除 (#)" onClick={() => removeNotification(n.id)}>
           <FiTrash2 size={14} />
         </button>
       </div>
@@ -430,66 +433,75 @@ export function InboxView({ onOpenAdd }: Props) {
       )}
 
       <div className="section">
-        <div className="inbox-toolbar">
-          <div className="filter-chips" style={{ margin: 0 }}>
-            <button className={`chip ${sort === 'priority' ? 'active' : ''}`} onClick={() => setSort('priority')}>
-              重要度順
-            </button>
-            <button className={`chip ${sort === 'newest' ? 'active' : ''}`} onClick={() => setSort('newest')}>
-              新着順
-            </button>
-            <span className="chip-sep" />
-            <button className={`chip ${!allProfiles ? 'active' : ''}`} onClick={() => setAllProfiles(false)}>
-              このプロファイル
-            </button>
-            <button className={`chip ${allProfiles ? 'active' : ''}`} onClick={() => setAllProfiles(true)}>
-              全プロファイル
-            </button>
-          </div>
-          {scoped.length > 0 && (
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn btn-sm" onClick={markAllNotificationsRead}>
-                <FiCheck size={13} /> すべて既読
+        {scoped.length > 0 && (
+          <div className="inbox-toolbar">
+            <div className="view-tabs" role="tablist">
+              {(
+                [
+                  ['open', '受信箱', openList.length],
+                  ['unread', '未読', unreadCount],
+                  ['important', '重要', importantCount],
+                  ['snoozed', 'スヌーズ中', snoozedCount],
+                  ['done', '完了', doneCount],
+                ] as [Filter, string, number][]
+              )
+                .filter(([k, , n]) => k === 'open' || k === 'unread' || n > 0 || filter === k)
+                .map(([k, label, n]) => (
+                  <button
+                    key={k}
+                    role="tab"
+                    aria-selected={filter === k}
+                    className={`view-tab ${filter === k ? 'active' : ''}`}
+                    onClick={() => setFilter(k)}
+                  >
+                    {label}
+                    {n > 0 && <span className="view-tab-count">{n}</span>}
+                  </button>
+                ))}
+            </div>
+
+            <div className="toolbar-controls">
+              {notifServiceIds.length > 1 && (
+                <select
+                  className="toolbar-select"
+                  value={serviceFilter}
+                  onChange={(e) => setServiceFilter(e.target.value)}
+                  title="サービスで絞り込み"
+                >
+                  <option value="">すべてのサービス</option>
+                  {notifServiceIds.map((sid) => {
+                    const svc = services.find((x) => x.id === sid);
+                    return svc ? (
+                      <option key={sid} value={sid}>
+                        {svc.name}
+                      </option>
+                    ) : null;
+                  })}
+                </select>
+              )}
+              <select
+                className="toolbar-select"
+                value={sort}
+                onChange={(e) => setSort(e.target.value as Sort)}
+                title="並び順"
+              >
+                <option value="priority">重要度順</option>
+                <option value="newest">新着順</option>
+              </select>
+              <button
+                className={`icon-btn toolbar-toggle ${allProfiles ? 'on' : ''}`}
+                title={allProfiles ? '全プロファイルの通知を表示中' : 'このプロファイルの通知だけを表示中'}
+                onClick={() => setAllProfiles((v) => !v)}
+              >
+                <FiLayers size={15} />
               </button>
-              <button className="btn btn-sm" onClick={clearNotifications}>
-                <FiTrash2 size={13} /> クリア
+              <button className="icon-btn" title="すべて既読にする" onClick={markAllNotificationsRead}>
+                <FiCheckCircle size={15} />
+              </button>
+              <button className="icon-btn" title="通知をすべてクリア" onClick={clearNotifications}>
+                <FiTrash2 size={15} />
               </button>
             </div>
-          )}
-        </div>
-
-        {scoped.length > 0 && (
-          <div className="filter-chips">
-            <button className={`chip ${filter === 'open' ? 'active' : ''}`} onClick={() => setFilter('open')}>
-              受信箱 {openList.length}
-            </button>
-            <button className={`chip ${filter === 'unread' ? 'active' : ''}`} onClick={() => setFilter('unread')}>
-              未読 {unreadCount}
-            </button>
-            {importantCount > 0 && (
-              <button className={`chip ${filter === 'important' ? 'active' : ''}`} onClick={() => setFilter('important')}>
-                重要 {importantCount}
-              </button>
-            )}
-            {snoozedCount > 0 && (
-              <button className={`chip ${filter === 'snoozed' ? 'active' : ''}`} onClick={() => setFilter('snoozed')}>
-                スヌーズ中 {snoozedCount}
-              </button>
-            )}
-            {doneCount > 0 && (
-              <button className={`chip ${filter === 'done' ? 'active' : ''}`} onClick={() => setFilter('done')}>
-                完了 {doneCount}
-              </button>
-            )}
-            {notifServiceIds.map((sid) => {
-              const svc = services.find((s) => s.id === sid);
-              if (!svc) return null;
-              return (
-                <button key={sid} className={`chip ${filter === sid ? 'active' : ''}`} onClick={() => setFilter(sid)}>
-                  {svc.name}
-                </button>
-              );
-            })}
           </div>
         )}
 

@@ -20,6 +20,7 @@ import {
   type ViewKey,
 } from '../store/useAppStore';
 import { ProfileSwitcher } from './ProfileSwitcher';
+import { useProfileSlide } from '../lib/useProfileSlide';
 import {
   CATEGORY_LABELS,
   CATEGORY_ORDER,
@@ -71,21 +72,10 @@ export function Sidebar({
   const [dragId, setDragId] = useState<string | null>(null);
   const canReorder = focusMode === 'normal';
 
-  // プロファイル切り替え時に、Arc のように中身を横にスライドさせる
-  const activeProfileId = useAppStore((s) => s.activeProfileId);
-  const profiles = useAppStore((s) => s.profiles);
-  const prevProfileRef = useRef(activeProfileId);
-  const [switching, setSwitching] = useState<'left' | 'right' | null>(null);
-  useEffect(() => {
-    const prev = prevProfileRef.current;
-    if (prev === activeProfileId) return;
-    prevProfileRef.current = activeProfileId;
-    const from = profiles.findIndex((p) => p.id === prev);
-    const to = profiles.findIndex((p) => p.id === activeProfileId);
-    setSwitching(to >= from ? 'right' : 'left');
-    const t = setTimeout(() => setSwitching(null), 300);
-    return () => clearTimeout(t);
-  }, [activeProfileId, profiles]);
+  // プロファイル切り替え時に、Arc のように中身を横にスライドさせる（スワイプに追従）
+  const asideRef = useRef<HTMLElement>(null);
+  const pagesRef = useRef<HTMLDivElement>(null);
+  useProfileSlide(asideRef, pagesRef);
 
   // 小ネタ: 未読バッジが増えた瞬間だけ軽くバウンスさせる
   const prevBadgesRef = useRef<Record<string, number>>({});
@@ -307,11 +297,9 @@ export function Sidebar({
 
   return (
     <aside
-      className={`sidebar ${switching ? 'profile-switching' : ''}`}
-      style={{
-        width: sidebarWidth,
-        ['--slide-from' as string]: switching === 'left' ? '-14px' : '14px',
-      }}
+      ref={asideRef}
+      className="sidebar"
+      style={{ width: sidebarWidth }}
       onMouseLeave={onMouseLeave}
     >
       <div className="sidebar-header" onClick={handleLogoClick}>
@@ -321,6 +309,7 @@ export function Sidebar({
         <h1>WorkOne</h1>
       </div>
 
+      <div className="sidebar-pages" ref={pagesRef}>
       <button
         className="nav-item"
         onClick={onOpenSearch}
@@ -412,6 +401,8 @@ export function Sidebar({
         <span className="nav-label">ショートカット</span>
         <span className="nav-badge">?</span>
       </button>
+
+      </div>
 
       <ProfileSwitcher />
 

@@ -14,6 +14,7 @@ import { WelcomeOverlay } from './components/WelcomeOverlay';
 import { TourOverlay } from './components/TourOverlay';
 import { LogoBurstOverlay } from './components/LogoBurstOverlay';
 import { UpdateBanner } from './components/UpdateBanner';
+import { GlobalTooltip } from './components/GlobalTooltip';
 import { useAppStore, useActiveProfile, profileOf } from './store/useAppStore';
 import { profileForSchedule } from './lib/schedule';
 import { useInboxAi } from './lib/useInboxAi';
@@ -281,6 +282,7 @@ export default function App() {
           }}
         />
       )}
+      <GlobalTooltip />
       {showLogoBurst && (
         <LogoBurstOverlay onDone={() => setShowLogoBurst(false)} />
       )}
