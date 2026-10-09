@@ -1,4 +1,5 @@
-import { FiCheckSquare, FiSquare } from 'react-icons/fi';
+import { FiCalendar, FiRepeat } from 'react-icons/fi';
+import { dueLabel } from './DuePicker';
 import { useAppStore } from '../store/useAppStore';
 
 const ymd = (d: Date) =>
@@ -31,21 +32,24 @@ export function HomeTasksWidget() {
       <div className="card">
         {list.length === 0 ? (
           <div className="list-row">
-            <span className="muted">やることはありません 🎉</span>
+            <span className="muted">やることはありません</span>
           </div>
         ) : (
           list.map((t) => (
-            <div className="list-row" key={t.id}>
-              <button className="icon-btn task-check" onClick={() => toggleTaskDone(t.id)} title="完了">
-                {t.done ? <FiCheckSquare size={16} /> : <FiSquare size={16} />}
-              </button>
+            <div className="list-row home-task" key={t.id}>
+              <button
+                className={`check-circle prio-${t.priority ?? 'normal'}`}
+                onClick={() => toggleTaskDone(t.id)}
+                title="完了"
+              />
               <div className="grow">
                 <div className="row-title">{t.title}</div>
               </div>
+              {t.repeat && <FiRepeat size={12} className="muted" />}
               {t.due && (
-                <span className={`muted ${t.due.slice(0, 10) < today ? 'danger-text' : ''}`} style={{ flexShrink: 0 }}>
-                  {t.due.slice(0, 10) < today ? '期限切れ ' : ''}
-                  {t.due.slice(5, 10).replace('-', '/')}
+                <span className={`due-chip set compact-static ${t.due.slice(0, 10) < today ? 'overdue' : ''}`}>
+                  <FiCalendar size={12} />
+                  {dueLabel(t.due, t.dueTime)}
                 </span>
               )}
             </div>

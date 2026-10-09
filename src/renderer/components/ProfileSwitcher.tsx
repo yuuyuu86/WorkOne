@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { FiPlus } from 'react-icons/fi';
 import { useAppStore } from '../store/useAppStore';
 import { ProfileEditModal } from './ProfileEditModal';
+import { ProfileIcon } from '../lib/profileIcons';
 
 /**
  * Arc の Space 切り替えのような、サイドバー下部のプロファイル列。
@@ -66,7 +67,7 @@ export function ProfileSwitcher() {
               setEditing(p.id);
             }}
           >
-            <span>{p.emoji}</span>
+            <ProfileIcon icon={p.icon} />
             {unread > 0 && <span className="profile-dot-badge" />}
           </button>
         );

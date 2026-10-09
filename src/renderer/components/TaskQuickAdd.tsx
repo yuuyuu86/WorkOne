@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { FiX } from 'react-icons/fi';
+import { FiFlag, FiX } from 'react-icons/fi';
+import { DuePicker } from './DuePicker';
 import { useAppStore } from '../store/useAppStore';
-import type { TaskSource } from '../types/service';
+import type { TaskPriority, TaskSource } from '../types/service';
 
 type Props = {
   initialTitle?: string;
@@ -25,14 +26,18 @@ export function TaskQuickAdd({
 }: Props) {
   const addTask = useAppStore((s) => s.addTask);
   const [title, setTitle] = useState(initialTitle);
-  const [due, setDue] = useState(initialDue?.slice(0, 10) ?? '');
+  const [due, setDue] = useState<string | undefined>(initialDue?.slice(0, 10));
+  const [dueTime, setDueTime] = useState<string | undefined>();
+  const [priority, setPriority] = useState<TaskPriority>('normal');
   const [note, setNote] = useState('');
 
   const save = () => {
     if (!title.trim()) return;
     addTask({
       title,
-      due: due || undefined,
+      due,
+      dueTime,
+      priority,
       note: note.trim() || undefined,
       source,
       serviceId,
@@ -60,8 +65,29 @@ export function TaskQuickAdd({
             onChange={(e) => setTitle(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && !e.nativeEvent.isComposing && save()}
           />
-          <label className="form-label">期限</label>
-          <input type="date" value={due} onChange={(e) => setDue(e.target.value)} />
+          <label className="form-label">期限・優先度</label>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <DuePicker
+              due={due}
+              time={dueTime}
+              onChange={(d, t) => {
+                setDue(d);
+                setDueTime(t);
+              }}
+            />
+            <div className="segmented">
+              {(['high', 'normal', 'low'] as TaskPriority[]).map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  className={`${priority === p ? 'active' : ''} prio-${p}`}
+                  onClick={() => setPriority(p)}
+                >
+                  <FiFlag size={12} /> {p === 'high' ? '高' : p === 'normal' ? '中' : '低'}
+                </button>
+              ))}
+            </div>
+          </div>
           <label className="form-label">メモ</label>
           <textarea
             rows={3}

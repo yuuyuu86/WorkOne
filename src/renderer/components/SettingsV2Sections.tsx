@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { FiCpu, FiEdit2, FiPlus, FiZap } from 'react-icons/fi';
+import { FiAlertTriangle, FiCheckCircle, FiCpu, FiEdit2, FiPlus, FiZap } from 'react-icons/fi';
 import { useAppStore } from '../store/useAppStore';
 import { ProfileEditModal } from './ProfileEditModal';
+import { ProfileIcon } from '../lib/profileIcons';
 
 // 表示中の webview から serviceId と webContentsId の対応を集める
 function collectWebviews(): { id: string; wcId: number }[] {
@@ -75,7 +76,7 @@ export function SettingsV2Sections() {
           {profiles.map((p, i) => (
             <div className="list-row" key={p.id}>
               <span className="profile-dot active" style={{ ['--dot-color' as string]: p.color }}>
-                {p.emoji}
+                <ProfileIcon icon={p.icon} />
               </span>
               <div className="grow">
                 <div className="row-title">
@@ -131,8 +132,15 @@ export function SettingsV2Sections() {
                 {aiStatus === null
                   ? '確認中…'
                   : aiStatus.available
-                    ? '✅ 利用できます'
-                    : `⚠️ 利用できません（${aiStatus.reason ?? '不明'}）`}
+                    ? (
+                      <span className="status-ok">
+                        <FiCheckCircle size={13} /> 利用できます
+                      </span>
+                    ) : (
+                      <span className="status-warn">
+                        <FiAlertTriangle size={13} /> 利用できません（{aiStatus.reason ?? '不明'}）
+                      </span>
+                    )}
               </div>
             </span>
           </label>
@@ -148,7 +156,7 @@ export function SettingsV2Sections() {
               使っていないサービスを休止してメモリを節約
               <div className="muted" style={{ marginTop: 2 }}>
                 指定時間開いていないサービスを一時的に閉じます。開き直すと再読み込みされます。
-                通知を受け続けたいサービスは「追加済みサービス」の 📌 で常駐にしてください。
+                通知を受け続けたいサービスは「追加済みサービス」のピンのボタンで常駐にしてください。
               </div>
             </span>
             <select

@@ -43,7 +43,8 @@ export type ProfileSchedule = {
 export type Profile = {
   id: string;
   name: string;
-  emoji: string;
+  /** アイコンのキー（lib/profileIcons） */
+  icon: string;
   color: string;
   schedule: ProfileSchedule[];
 };
@@ -100,11 +101,23 @@ export type AppNotification = {
 /** タスク */
 export type TaskSource = 'manual' | 'notification' | 'classroom' | 'ai';
 
+export type TaskPriority = 'high' | 'normal' | 'low';
+export type TaskRepeat = 'daily' | 'weekdays' | 'weekly' | 'monthly';
+
+export type Subtask = { id: string; title: string; done: boolean };
+
 export type Task = {
   id: string;
   title: string;
-  /** 期限（YYYY-MM-DD または ISO）。無ければ undefined */
+  /** 期限日（YYYY-MM-DD）。無ければ undefined */
   due?: string;
+  /** 期限の時刻（HH:MM）。あればその時刻に通知する */
+  dueTime?: string;
+  /** 通知済み（同じ期限で二重に通知しない） */
+  remindedFor?: string;
+  priority?: TaskPriority;
+  repeat?: TaskRepeat;
+  subtasks?: Subtask[];
   note?: string;
   source: TaskSource;
   /** 出どころのサービス／リンク（クリックで開く） */

@@ -13,6 +13,8 @@ import type {
   Task,
 } from '../types/service';
 import { DEFAULT_PROFILE_ID } from '../types/service';
+import { profileIconKeyFromLegacy } from '../lib/profileIcons';
+import { nextDue } from '../lib/taskRepeat';
 import { CATEGORY_DEFAULT_ICON } from '../data/iconMap';
 
 // 画面（サイドバーの遷移先）
@@ -38,7 +40,7 @@ type CustomServiceInput = {
 export const DEFAULT_PROFILE: Profile = {
   id: DEFAULT_PROFILE_ID,
   name: '個人',
-  emoji: '🏠',
+  icon: 'home',
   color: '#5b8def',
   schedule: [],
 };
@@ -424,18 +426,34 @@ export const useAppStore = create<AppState>()(
         set({
           tasks: get().tasks.map((t) => (t.id === id ? { ...t, ...patch } : t)),
         }),
-      toggleTaskDone: (id) =>
-        set({
-          tasks: get().tasks.map((t) =>
-            t.id === id
-              ? {
-                  ...t,
-                  done: !t.done,
-                  doneAt: !t.done ? new Date().toISOString() : undefined,
-                }
-              : t
-          ),
-        }),
+      toggleTaskDone: (id) => {
+        const target = get().tasks.find((t) => t.id === id);
+        if (!target) return;
+        const completing = !target.done;
+        const tasks = get().tasks.map((t) =>
+          t.id === id
+            ? {
+                ...t,
+                done: completing,
+                doneAt: completing ? new Date().toISOString() : undefined,
+              }
+            : t
+        );
+        // 繰り返しタスクは、完了したら次回分を作る（サブタスクは未完了に戻す）
+        if (completing && target.repeat) {
+          tasks.unshift({
+            ...target,
+            id: uid(),
+            done: false,
+            doneAt: undefined,
+            remindedFor: undefined,
+            due: nextDue(target.due, target.repeat),
+            subtasks: target.subtasks?.map((s) => ({ ...s, id: uid(), done: false })),
+            createdAt: new Date().toISOString(),
+          });
+        }
+        set({ tasks });
+      },
       removeTask: (id) => set({ tasks: get().tasks.filter((t) => t.id !== id) }),
       clearDoneTasks: () => set({ tasks: get().tasks.filter((t) => !t.done) }),
 
@@ -902,7 +920,7 @@ export const useAppStore = create<AppState>()(
     {
       name: 'workone-store',
       // 永続化するキーだけを選ぶ（UI ナビゲーション状態は除外）
-      version: 2,
+      version: 3,
       // v1 → v2: 既存サービスは既定プロファイルへ。通知は以前は保存していなかった。
       migrate: (persisted: any, version) => {
         if (persisted && version < 2) {
@@ -912,6 +930,15 @@ export const useAppStore = create<AppState>()(
           }));
           persisted.profiles = [DEFAULT_PROFILE];
           persisted.activeProfileId = DEFAULT_PROFILE_ID;
+        }
+        // v2 → v3: プロファイルの絵文字をアイコンキーへ
+        if (persisted && version < 3) {
+          persisted.profiles = (persisted.profiles ?? [DEFAULT_PROFILE]).map(
+            (p: any) => {
+              const { emoji, ...rest } = p;
+              return { ...rest, icon: rest.icon ?? profileIconKeyFromLegacy(emoji) };
+            }
+          );
         }
         return persisted;
       },

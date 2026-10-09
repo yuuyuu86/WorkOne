@@ -8,6 +8,7 @@ import {
   FiCheckSquare,
 } from 'react-icons/fi';
 import { useAppStore, useProfileServices } from '../store/useAppStore';
+import { ProfileIcon } from '../lib/profileIcons';
 import { ServiceIcon } from './ServiceIcon';
 import { getServiceSearchUrl } from '../lib/search';
 
@@ -22,7 +23,7 @@ type Item =
   | { kind: 'calendar'; id: string; serviceId: string; serviceName: string; icon: string; title: string; url: string }
   | { kind: 'addTask'; id: string; title: string }
   | { kind: 'task'; id: string; title: string; sub: string }
-  | { kind: 'profile'; id: string; profileId: string; title: string; emoji: string };
+  | { kind: 'profile'; id: string; profileId: string; title: string; icon: string };
 
 export function CommandPalette({ onClose }: Props) {
   const history = useAppStore((s) => s.history);
@@ -167,7 +168,7 @@ export function CommandPalette({ onClose }: Props) {
             id: `profile-${p.id}`,
             profileId: p.id,
             title: p.name,
-            emoji: p.emoji,
+            icon: p.icon,
           }))
       : [];
 
@@ -264,7 +265,9 @@ export function CommandPalette({ onClose }: Props) {
                 {item.kind === 'addTask' || item.kind === 'task' ? (
                   <FiCheckSquare size={20} style={{ color: 'var(--accent)', margin: '0 2px' }} />
                 ) : item.kind === 'profile' ? (
-                  <span style={{ fontSize: 18, width: 24, textAlign: 'center' }}>{item.emoji}</span>
+                  <span style={{ width: 24, display: 'flex', justifyContent: 'center', color: 'var(--accent)' }}>
+                    <ProfileIcon icon={item.icon} size={18} />
+                  </span>
                 ) : (
                   <ServiceIcon iconKey={item.icon} chip={24} />
                 )}

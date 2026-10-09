@@ -3,8 +3,8 @@ import { FiPlus, FiTrash2, FiX } from 'react-icons/fi';
 import { PROFILE_COLORS, useAppStore } from '../store/useAppStore';
 import { DEFAULT_PROFILE_ID, type ProfileSchedule } from '../types/service';
 import { confirmAction } from '../lib/confirm';
+import { PROFILE_ICON_KEYS, ProfileIcon } from '../lib/profileIcons';
 
-const EMOJIS = ['🏠', '🏫', '💼', '🎮', '📚', '🎨', '⚽', '🌙', '🧪', '🎵'];
 const DAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'];
 
 type Props = {
@@ -24,7 +24,9 @@ export function ProfileEditModal({ profileId, onClose }: Props) {
   const setActiveProfile = useAppStore((s) => s.setActiveProfile);
 
   const [name, setName] = useState(existing?.name ?? '');
-  const [emoji, setEmoji] = useState(existing?.emoji ?? EMOJIS[profileCount % EMOJIS.length]);
+  const [icon, setIcon] = useState(
+    existing?.icon ?? PROFILE_ICON_KEYS[profileCount % PROFILE_ICON_KEYS.length]
+  );
   const [color, setColor] = useState(
     existing?.color ?? PROFILE_COLORS[profileCount % PROFILE_COLORS.length]
   );
@@ -35,9 +37,9 @@ export function ProfileEditModal({ profileId, onClose }: Props) {
   const save = () => {
     const trimmed = name.trim() || '新しいプロファイル';
     if (existing) {
-      updateProfile(existing.id, { name: trimmed, emoji, color, schedule });
+      updateProfile(existing.id, { name: trimmed, icon, color, schedule });
     } else {
-      const id = addProfile({ name: trimmed, emoji, color });
+      const id = addProfile({ name: trimmed, icon, color });
       updateProfile(id, { schedule });
       setActiveProfile(id);
     }
@@ -78,13 +80,14 @@ export function ProfileEditModal({ profileId, onClose }: Props) {
 
           <label className="form-label">アイコン</label>
           <div className="profile-choice-row">
-            {EMOJIS.map((em) => (
+            {PROFILE_ICON_KEYS.map((key) => (
               <button
-                key={em}
-                className={`profile-choice ${em === emoji ? 'active' : ''}`}
-                onClick={() => setEmoji(em)}
+                key={key}
+                className={`profile-choice ${key === icon ? 'active' : ''}`}
+                style={key === icon ? { color } : undefined}
+                onClick={() => setIcon(key)}
               >
-                {em}
+                <ProfileIcon icon={key} size={16} />
               </button>
             ))}
           </div>

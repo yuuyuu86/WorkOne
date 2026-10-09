@@ -17,6 +17,7 @@ import { UpdateBanner } from './components/UpdateBanner';
 import { useAppStore, useActiveProfile, profileOf } from './store/useAppStore';
 import { profileForSchedule } from './lib/schedule';
 import { useInboxAi } from './lib/useInboxAi';
+import { useTaskReminders } from './lib/useTaskReminders';
 import { isWithinDnd } from './lib/dnd';
 
 export default function App() {
@@ -128,6 +129,8 @@ export default function App() {
 
   // 新着通知の重要度スコア・AI 要約・タスク候補の抽出
   useInboxAi();
+  // 時刻つきタスクのリマインダー
+  useTaskReminders();
 
   // Cmd/Ctrl+K はメニューのアクセラレータで処理（webview にフォーカスがあっても効くため）
 

@@ -10,6 +10,7 @@ import {
   FiBookmark,
   FiCpu,
   FiRotateCcw,
+  FiX,
 } from 'react-icons/fi';
 import { useAppStore, profileOf } from '../store/useAppStore';
 import type { AppNotification } from '../types/service';
@@ -66,6 +67,9 @@ const SNOOZE_OPTIONS: { label: string; at: () => Date }[] = [
 ];
 
 const isOpen = (n: AppNotification) => !n.done && !n.snoozedUntil;
+
+/** AI 要約の末尾の句点などを落として見出し向きにする */
+const cleanSentence = (t: string) => t.trim().replace(/[。.]+$/, '');
 
 export function InboxView({ onOpenAdd }: Props) {
   const services = useAppStore((s) => s.services);
@@ -249,7 +253,7 @@ export function InboxView({ onOpenAdd }: Props) {
         {n.summary ? (
           <div className="row-sub">
             <FiCpu size={11} style={{ marginRight: 4 }} />
-            {n.summary}
+            {cleanSentence(n.summary)}
           </div>
         ) : (
           n.body && <div className="row-sub">{n.body}</div>
@@ -274,7 +278,7 @@ export function InboxView({ onOpenAdd }: Props) {
       )}
       <span className="muted" style={{ flexShrink: 0 }}>
         {n.snoozedUntil
-          ? `⏰ ${new Date(n.snoozedUntil).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`
+          ? `${new Date(n.snoozedUntil).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`
           : timeAgo(n.receivedAt)}
       </span>
       <div className="row-actions" onClick={(e) => e.stopPropagation()}>
@@ -363,33 +367,64 @@ export function InboxView({ onOpenAdd }: Props) {
         <div className="section">
           <div className="card focus3-card">
             <div className="focus3-head">
-              <h3 className="section-title" style={{ margin: 0 }}>
-                今日対応が必要な {top3.length} 件
-              </h3>
+              <div className="focus3-title">
+                <span>今日対応が必要</span>
+                <span className="section-count">{top3.length}</span>
+              </div>
               {aiEnabled && (
-                <button className="btn btn-sm" onClick={runDigest} disabled={digest?.loading}>
-                  <FiCpu size={13} /> {digest?.loading ? '要約中…' : 'AI でまとめる'}
+                <button
+                  className="btn btn-sm btn-ghost"
+                  onClick={runDigest}
+                  disabled={digest?.loading}
+                  title="オンデバイス AI で要点をまとめる"
+                >
+                  <FiCpu size={13} /> {digest?.loading ? 'まとめています…' : 'AI でまとめる'}
                 </button>
               )}
             </div>
-            {digest?.text && <p className="digest-text">{digest.text}</p>}
-            {top3.map((n) => (
-              <div key={n.id} className="focus3-item" onClick={() => openFrom(n)}>
-                <ServiceIcon iconKey={n.icon} chip={20} />
-                <span className="grow">{n.summary || n.title}</span>
-                <span className="muted">{n.serviceName}</span>
-                <button
-                  className="icon-btn"
-                  title="完了"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    markNotificationDone(n.id);
-                  }}
-                >
-                  <FiCheck size={14} />
-                </button>
+
+            {digest?.text && (
+              <div className="digest-panel">
+                <div className="digest-label">
+                  <FiCpu size={12} /> AI のまとめ
+                  <button className="icon-btn" title="閉じる" onClick={() => setDigest(null)}>
+                    <FiX size={12} />
+                  </button>
+                </div>
+                <ul>
+                  {digest.text
+                    .split('\n')
+                    .map((l) => l.replace(/^\s*[・\-*•]\s*/, '').trim())
+                    .filter(Boolean)
+                    .map((l, i) => (
+                      <li key={i}>{l}</li>
+                    ))}
+                </ul>
               </div>
-            ))}
+            )}
+
+            <div className="focus3-list">
+              {top3.map((n, i) => (
+                <div key={n.id} className="focus3-item" onClick={() => openFrom(n)}>
+                  <span className="focus3-rank">{i + 1}</span>
+                  <ServiceIcon iconKey={n.icon} chip={26} />
+                  <div className="focus3-body">
+                    <div className="focus3-text">{cleanSentence(n.summary || n.title)}</div>
+                    <div className="focus3-meta">
+                      {n.serviceName}・{timeAgo(n.receivedAt)}
+                    </div>
+                  </div>
+                  <div className="focus3-actions" onClick={(e) => e.stopPropagation()}>
+                    <button className="btn btn-sm btn-ghost" title="タスク化 (t)" onClick={() => setTaskFor(n)}>
+                      <FiCheckSquare size={13} /> タスク化
+                    </button>
+                    <button className="btn btn-sm" title="完了 (e)" onClick={() => markNotificationDone(n.id)}>
+                      <FiCheck size={13} /> 完了
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}

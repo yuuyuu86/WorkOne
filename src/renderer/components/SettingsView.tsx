@@ -10,6 +10,7 @@ import {
   FiBellOff,
 } from 'react-icons/fi';
 import { SettingsV2Sections } from './SettingsV2Sections';
+import { LuPin } from 'react-icons/lu';
 import { useAppStore } from '../store/useAppStore';
 import { CATEGORY_LABELS, type Service } from '../types/service';
 import { ServiceIcon } from './ServiceIcon';
@@ -233,7 +234,7 @@ export function SettingsView() {
                 >
                   {profiles.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.emoji} {p.name}
+                      {p.name}
                     </option>
                   ))}
                 </select>
@@ -241,9 +242,9 @@ export function SettingsView() {
                   className="icon-btn"
                   title={svc.keepAlive ? '常駐を解除（休止の対象にする）' : '常駐させる（休止しない）'}
                   onClick={() => setServiceKeepAlive(svc.id, !svc.keepAlive)}
-                  style={{ opacity: svc.keepAlive ? 1 : 0.35 }}
+                  style={{ color: svc.keepAlive ? 'var(--accent)' : undefined }}
                 >
-                  📌
+                  <LuPin size={15} fill={svc.keepAlive ? 'currentColor' : 'none'} />
                 </button>
                 <label
                   className="muted"
