@@ -17,11 +17,9 @@ import {
 import {
   useAppStore,
   useProfileServices,
-  profileOf,
   type ViewKey,
 } from '../store/useAppStore';
 import { ProfileSwitcher } from './ProfileSwitcher';
-import { useProfileSlide } from '../lib/useProfileSlide';
 import {
   CATEGORY_LABELS,
   CATEGORY_ORDER,
@@ -73,13 +71,21 @@ export function Sidebar({
   const [dragId, setDragId] = useState<string | null>(null);
   const canReorder = focusMode === 'normal';
 
-  // プロファイル切り替え時に、Arc のように中身を横にスライドさせる（スワイプに追従）
-  const asideRef = useRef<HTMLElement>(null);
-  const trackRef = useRef<HTMLDivElement>(null);
-  const profiles = useAppStore((s) => s.profiles);
+  // プロファイル切り替え時に、Arc のように中身を横にスライドさせる
   const activeProfileId = useAppStore((s) => s.activeProfileId);
-  const activeIndex = Math.max(0, profiles.findIndex((p) => p.id === activeProfileId));
-  useProfileSlide(asideRef, trackRef);
+  const profiles = useAppStore((s) => s.profiles);
+  const prevProfileRef = useRef(activeProfileId);
+  const [switching, setSwitching] = useState<'left' | 'right' | null>(null);
+  useEffect(() => {
+    const prev = prevProfileRef.current;
+    if (prev === activeProfileId) return;
+    prevProfileRef.current = activeProfileId;
+    const from = profiles.findIndex((p) => p.id === prev);
+    const to = profiles.findIndex((p) => p.id === activeProfileId);
+    setSwitching(to >= from ? 'right' : 'left');
+    const t = setTimeout(() => setSwitching(null), 300);
+    return () => clearTimeout(t);
+  }, [activeProfileId, profiles]);
 
   // 小ネタ: 未読バッジが増えた瞬間だけ軽くバウンスさせる
   const prevBadgesRef = useRef<Record<string, number>>({});
@@ -154,12 +160,12 @@ export function Sidebar({
   };
 
   // 集中モードに応じて表示するサービスを絞る
-  const visibleOf = (list: Service[]) =>
-    focusMode === 'focus'
-      ? list.filter((s) => focusServiceIds.includes(s.id))
-      : focusMode === 'deep'
-        ? [] // 完全集中モードはサービス一覧を隠す
-        : list;
+  let visibleServices = services;
+  if (focusMode === 'focus') {
+    visibleServices = services.filter((s) => focusServiceIds.includes(s.id));
+  } else if (focusMode === 'deep') {
+    visibleServices = []; // 完全集中モードはサービス一覧を隠す
+  }
 
   // Slack のワークスペースか（host が slack.com 系）
   const isSlackService = (s: Service) => {
@@ -177,14 +183,7 @@ export function Sidebar({
       className={`nav-item ${sub ? 'nav-sub' : ''} ${
         activeView === 'service' && activeServiceId === svc.id ? 'active' : ''
       } ${dragId === svc.id ? 'dragging' : ''}`}
-      onClick={() => {
-        // 隣のプロファイルの一覧（スワイプ中に見えている側）から開いた場合は切り替えも行う
-        const pid = profileOf(svc);
-        if (pid !== useAppStore.getState().activeProfileId) {
-          useAppStore.getState().setActiveProfile(pid);
-        }
-        openService(svc.id);
-      }}
+      onClick={() => openService(svc.id)}
       title={svc.name}
       draggable={canReorder}
       onDragStart={() => canReorder && setDragId(svc.id)}
@@ -260,9 +259,9 @@ export function Sidebar({
   };
 
   // カテゴリ別グループ（該当サービスがあるカテゴリのみ見出しを出す）
-  const renderGrouped = (list: Service[]) =>
+  const renderGrouped = () =>
     CATEGORY_ORDER.map((cat) => {
-      const items = list.filter((s) => s.category === cat);
+      const items = visibleServices.filter((s) => s.category === cat);
       if (items.length === 0) return null;
       const collapsed = collapsedCategories.includes(cat);
       const unread = items.reduce(
@@ -290,29 +289,6 @@ export function Sidebar({
       );
     });
 
-  // 1 プロファイル分のサービス一覧
-  const servicesPane = (pid: string) => {
-    const own = allServices.filter((s) => profileOf(s) === pid);
-    const visible = visibleOf(own);
-    if (focusMode === 'deep') {
-      return (
-        <div className="sidebar-empty">
-          完全集中モード中はサービス一覧を非表示にしています。
-        </div>
-      );
-    }
-    if (visible.length === 0) {
-      return (
-        <div className="sidebar-empty">
-          {own.length === 0
-            ? '「サービスを追加」からGmailやSlackなどを追加できます。'
-            : '集中モードで表示するサービスが選択されていません。'}
-        </div>
-      );
-    }
-    return sidebarGrouped ? renderGrouped(visible) : renderServiceList(visible);
-  };
-
   const navItem = (
     key: ViewKey,
     label: string,
@@ -331,9 +307,11 @@ export function Sidebar({
 
   return (
     <aside
-      ref={asideRef}
-      className="sidebar"
-      style={{ width: sidebarWidth }}
+      className={`sidebar ${switching ? 'profile-switching' : ''}`}
+      style={{
+        width: sidebarWidth,
+        ['--slide-from' as string]: switching === 'left' ? '-14px' : '14px',
+      }}
       onMouseLeave={onMouseLeave}
     >
       <div className="sidebar-header" onClick={handleLogoClick}>
@@ -392,18 +370,22 @@ export function Sidebar({
       </div>
 
       <div className="sidebar-section-label">マイサービス</div>
-      {/* 前・現在・次のプロファイルのサービス一覧を横に並べ、スワイプで一緒に動かす */}
-      <div className="profile-viewport" data-tour="services">
-        <div className="profile-track" ref={trackRef}>
-          {[-1, 0, 1].map((offset) => {
-            const p = profiles[activeIndex + offset];
-            return (
-              <div className="profile-pane" key={p ? p.id : `empty${offset}`} aria-hidden={offset !== 0}>
-                {p && servicesPane(p.id)}
-              </div>
-            );
-          })}
-        </div>
+      <div data-tour="services">
+        {focusMode === 'deep' ? (
+          <div className="sidebar-empty">
+            完全集中モード中はサービス一覧を非表示にしています。
+          </div>
+        ) : visibleServices.length === 0 ? (
+          <div className="sidebar-empty">
+            {services.length === 0
+              ? '「サービスを追加」からGmailやSlackなどを追加できます。'
+              : '集中モードで表示するサービスが選択されていません。'}
+          </div>
+        ) : sidebarGrouped ? (
+          renderGrouped()
+        ) : (
+          renderServiceList(visibleServices)
+        )}
       </div>
 
       <div style={{ flex: 1 }} />
@@ -430,7 +412,6 @@ export function Sidebar({
         <span className="nav-label">ショートカット</span>
         <span className="nav-badge">?</span>
       </button>
-
 
       <ProfileSwitcher />
 

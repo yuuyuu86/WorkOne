@@ -1870,6 +1870,19 @@ textarea {
   background: color-mix(in srgb, var(--profile-color, transparent) 7%, var(--sidebar-bg));
   transition: background 0.35s ease;
 }
+.sidebar.profile-switching > :not(.profile-switcher):not(.sidebar-resizer) {
+  animation: profile-slide 0.28s ease;
+}
+@keyframes profile-slide {
+  from {
+    opacity: 0;
+    transform: translateX(var(--slide-from, 12px));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
 .profile-switcher {
   display: flex;
   flex-wrap: wrap;
@@ -2730,25 +2743,3 @@ kbd {
   background: var(--accent-soft);
 }
 
-/* ---------- プロファイルのスライド（Arc 風） ---------- */
-.sidebar {
-  overflow-x: hidden;
-}
-/* サービス一覧の表示枠。中のトラックに「前・現在・次」の一覧が横に並ぶ */
-.profile-viewport {
-  overflow: hidden;
-  margin: 0 -12px;
-}
-.profile-track {
-  display: flex;
-  width: 300%;
-  align-items: flex-start;
-  will-change: transform;
-  transform: translateX(-33.3333%);
-}
-.profile-pane {
-  width: calc(100% / 3);
-  flex-shrink: 0;
-  padding: 0 12px;
-  box-sizing: border-box;
-}
