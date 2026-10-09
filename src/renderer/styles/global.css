@@ -2731,13 +2731,24 @@ kbd {
 }
 
 /* ---------- プロファイルのスライド（Arc 風） ---------- */
-.sidebar-pages {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  will-change: transform;
-}
 .sidebar {
   overflow-x: hidden;
+}
+/* サービス一覧の表示枠。中のトラックに「前・現在・次」の一覧が横に並ぶ */
+.profile-viewport {
+  overflow: hidden;
+  margin: 0 -12px;
+}
+.profile-track {
+  display: flex;
+  width: 300%;
+  align-items: flex-start;
+  will-change: transform;
+  transform: translateX(-33.3333%);
+}
+.profile-pane {
+  width: calc(100% / 3);
+  flex-shrink: 0;
+  padding: 0 12px;
+  box-sizing: border-box;
 }
