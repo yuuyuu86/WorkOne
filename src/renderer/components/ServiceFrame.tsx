@@ -769,6 +769,7 @@ export function ServiceFrame({ service, isActive }: Props) {
           ref={webviewRef}
           src={initialSrc}
           partition={partitionFor(service.profileId)}
+          data-service-id={service.id}
           useragent={CHROME_USER_AGENT}
           // Calendar だけ、裏でも描画を止めない（時刻つき予定の読み取りに必要）。
           // 他サービスまで常時フル稼働にするとメモリ/CPU負荷が増え、レンダラーが

@@ -9,6 +9,7 @@ import {
   FiStar,
   FiBellOff,
 } from 'react-icons/fi';
+import { SettingsV2Sections } from './SettingsV2Sections';
 import { useAppStore } from '../store/useAppStore';
 import { CATEGORY_LABELS, type Service } from '../types/service';
 import { ServiceIcon } from './ServiceIcon';
@@ -21,6 +22,9 @@ import { fileToResizedDataUrl } from '../lib/image';
 export function SettingsView() {
   const [editing, setEditing] = useState<Service | null>(null);
   const services = useAppStore((s) => s.services);
+  const profiles = useAppStore((s) => s.profiles);
+  const moveServiceToProfile = useAppStore((s) => s.moveServiceToProfile);
+  const setServiceKeepAlive = useAppStore((s) => s.setServiceKeepAlive);
   const focusServiceIds = useAppStore((s) => s.focusServiceIds);
   const notificationsEnabled = useAppStore((s) => s.notificationsEnabled);
   const setNotificationsEnabled = useAppStore((s) => s.setNotificationsEnabled);
@@ -221,6 +225,26 @@ export function SettingsView() {
                     {svc.isCustom ? '・カスタム' : ''}
                   </div>
                 </div>
+                <select
+                  className="profile-select"
+                  value={svc.profileId ?? 'default'}
+                  title="所属プロファイル（移動するとログインし直しが必要です）"
+                  onChange={(e) => moveServiceToProfile(svc.id, e.target.value)}
+                >
+                  {profiles.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.emoji} {p.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  className="icon-btn"
+                  title={svc.keepAlive ? '常駐を解除（休止の対象にする）' : '常駐させる（休止しない）'}
+                  onClick={() => setServiceKeepAlive(svc.id, !svc.keepAlive)}
+                  style={{ opacity: svc.keepAlive ? 1 : 0.35 }}
+                >
+                  📌
+                </button>
                 <label
                   className="muted"
                   style={{ display: 'flex', alignItems: 'center', gap: 6 }}
@@ -296,6 +320,8 @@ export function SettingsView() {
           並び替えは矢印ボタンで行います。「集中」のチェックは集中モードでの表示対象です。
         </p>
       </div>
+
+      <SettingsV2Sections />
 
       <div className="section">
         <h3 className="section-title">外観</h3>

@@ -96,6 +96,23 @@ const api = {
     items: { url: string; name: string }[];
   }> => ipcRenderer.invoke('scrape-slack-workspaces', partition),
 
+  /** webview ごとのメモリ使用量（MB）。pairs は serviceId と webContentsId の対応 */
+  webviewMemory: (
+    pairs: { id: string; wcId: number }[]
+  ): Promise<{ id: string; mb: number }[]> =>
+    ipcRenderer.invoke('webview-memory', pairs),
+
+  /** 自動アップデート: 状態を購読（戻り値で解除） */
+  onUpdateStatus: (
+    cb: (s: { state: 'available' | 'downloading' | 'ready' | 'error'; version?: string; percent?: number }) => void
+  ): (() => void) => {
+    const h = (_e: unknown, s: any) => cb(s);
+    ipcRenderer.on('update-status', h);
+    return () => ipcRenderer.removeListener('update-status', h);
+  },
+  /** ダウンロード済みのアップデートを適用して再起動 */
+  installUpdate: (): Promise<void> => ipcRenderer.invoke('install-update'),
+
   /** オンデバイス AI（Apple Foundation Models）。データは Mac の外に出ない */
   ai: {
     status: (): Promise<{ available: boolean; reason?: string }> =>

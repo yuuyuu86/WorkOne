@@ -289,6 +289,7 @@ try {
 // Home ウィジェットの既定の並び順（新規ユーザー・リセット時）
 export const DEFAULT_HOME_WIDGETS = [
   'stats',
+  'tasks',
   'notifications',
   'calendar',
   'classroom',

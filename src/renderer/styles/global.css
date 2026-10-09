@@ -2186,3 +2186,33 @@ kbd {
 .danger-text {
   color: var(--danger);
 }
+
+/* ---------- 設定（v2） ---------- */
+.profile-select {
+  font-size: 12px;
+  max-width: 120px;
+}
+.mem-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+  padding: 3px 0;
+}
+.mem-bar {
+  width: 120px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--hover);
+  overflow: hidden;
+}
+.mem-bar span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+.mem-mb {
+  width: 64px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}

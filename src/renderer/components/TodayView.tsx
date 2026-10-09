@@ -29,6 +29,7 @@ import {
 import { fileToResizedDataUrl } from '../lib/image';
 import { ServiceIcon } from './ServiceIcon';
 import { WeatherIcon } from './WeatherIcon';
+import { HomeTasksWidget } from './HomeTasksWidget';
 import { ClassroomCard } from './ClassroomCard';
 import { CalendarCard } from './CalendarCard';
 import {
@@ -48,7 +49,8 @@ const FOCUS_LABEL: Record<string, string> = {
 // 編集モードでウィジェットに表示する名称
 const WIDGET_LABELS: Record<string, string> = {
   stats: 'サマリー',
-  notifications: '最近の通知',
+  tasks: 'タスク',
+  notifications: '対応が必要な通知',
   calendar: '今日の予定',
   classroom: 'Classroomの課題',
   frequent: 'よく使うサービス',
@@ -239,6 +241,7 @@ export function TodayView({ onOpenAdd }: Props) {
     switch (id) {
       case 'stats':
       case 'focus':
+      case 'tasks':
         return true;
       case 'notifications':
         return notifications.length > 0;
@@ -363,9 +366,13 @@ export function TodayView({ onOpenAdd }: Props) {
       case 'notifications':
         return (
           <div className="section" style={{ margin: 0 }}>
-            <h3 className="section-title">最近の通知</h3>
+            <h3 className="section-title">対応が必要な通知</h3>
             <div className="card">
-              {notifications.slice(0, 5).map((n) => (
+              {notifications
+                .filter((n) => !n.done && !n.snoozedUntil)
+                .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+                .slice(0, 5)
+                .map((n) => (
                 <div
                   className="list-row"
                   key={n.id}
@@ -392,6 +399,8 @@ export function TodayView({ onOpenAdd }: Props) {
             </div>
           </div>
         );
+      case 'tasks':
+        return <HomeTasksWidget />;
       case 'calendar':
         return <CalendarCard />;
       case 'classroom':

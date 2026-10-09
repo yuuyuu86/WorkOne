@@ -9,10 +9,13 @@ import {
   Tray,
   Menu,
   nativeImage,
+  webContents,
 } from 'electron';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import fs from 'node:fs';
+import { OnDeviceAI, aiHelperPath } from './ai';
+import { setupAutoUpdate, installUpdate } from './updater';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -26,6 +29,11 @@ const RESOURCES_DIR = VITE_DEV_SERVER_URL
 
 // アプリ名を明示（開発時の "Electron" 表示や通知タイトルを WorkOne に）
 app.setName('WorkOne');
+
+// 動作確認用: 実データに触れずに起動できるよう、データの保存先を差し替える
+if (process.env.WORKONE_USER_DATA) {
+  app.setPath('userData', process.env.WORKONE_USER_DATA);
+}
 
 // 改名前（MessageDock）のデータを一度だけ新名称（WorkOne）へ移行する。
 // これでログイン・設定・履歴をそのまま引き継ぐ（userData フォルダごとリネーム）。
@@ -495,9 +503,13 @@ function compareVersion(a: string, b: string): number {
   return 0;
 }
 
+// 自動アップデート（署名済みビルドのみ）が有効か
+let autoUpdateEnabled = false;
+
 // 最新版が現在より新しければ {version, url} を返す。無ければ null。
+// 自動アップデートが有効なときは electron-updater 側で通知するので null。
 ipcMain.handle('check-update', async () => {
-  if (!UPDATE_REPO) return null;
+  if (!UPDATE_REPO || autoUpdateEnabled) return null;
   try {
     const res = await fetch(
       `https://api.github.com/repos/${UPDATE_REPO}/releases/latest`,
@@ -513,6 +525,49 @@ ipcMain.handle('check-update', async () => {
   } catch {
     return null;
   }
+});
+
+// ===== オンデバイス AI（Apple Foundation Models） =====
+const onDeviceAI = new OnDeviceAI(aiHelperPath(RESOURCES_DIR));
+
+type AiItem = { id?: string; service: string; title: string; body: string };
+const sanitizeAiItems = (items: unknown): AiItem[] =>
+  (Array.isArray(items) ? items : []).slice(0, 12).map((x: any) => ({
+    id: typeof x?.id === 'string' ? x.id : undefined,
+    service: String(x?.service ?? '').slice(0, 60),
+    title: String(x?.title ?? '').slice(0, 200),
+    body: String(x?.body ?? '').slice(0, 500),
+  }));
+
+ipcMain.handle('ai-status', () => onDeviceAI.status());
+
+ipcMain.handle('ai-triage', async (_event, items: unknown, today: string) => {
+  const r = await onDeviceAI.request('triage', {
+    items: sanitizeAiItems(items),
+    today: String(today ?? '').slice(0, 10),
+  });
+  return { ok: !!r.ok, items: Array.isArray(r.items) ? r.items : [] };
+});
+
+ipcMain.handle('ai-digest', async (_event, items: unknown) => {
+  const r = await onDeviceAI.request('digest', { items: sanitizeAiItems(items) });
+  return { ok: !!r.ok, text: typeof r.text === 'string' ? r.text : '' };
+});
+
+// webview ごとのメモリ使用量（設定画面のパフォーマンス表示用）
+ipcMain.handle('webview-memory', (_event, pairs: unknown) => {
+  const list = Array.isArray(pairs) ? pairs : [];
+  const byPid = new Map(
+    app.getAppMetrics().map((m) => [m.pid, m.memory.workingSetSize] as const)
+  );
+  const out: { id: string; mb: number }[] = [];
+  for (const p of list as { id: string; wcId: number }[]) {
+    const wc = webContents.fromId(Number(p?.wcId));
+    if (!wc || wc.isDestroyed()) continue;
+    const kb = byPid.get(wc.getOSProcessId());
+    if (kb !== undefined) out.push({ id: String(p.id), mb: Math.round(kb / 1024) });
+  }
+  return out;
 });
 
 // 現在のアプリバージョン
@@ -978,10 +1033,17 @@ app.whenReady().then(() => {
   buildAppMenu();
   createTray();
   createWindow();
+  autoUpdateEnabled = setupAutoUpdate(() => mainWindow);
+});
+
+ipcMain.handle('install-update', () => {
+  isQuitting = true;
+  installUpdate();
 });
 
 app.on('before-quit', () => {
   isQuitting = true;
+  onDeviceAI.dispose();
   saveWindowState();
 });
 
