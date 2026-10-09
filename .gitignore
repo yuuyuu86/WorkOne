@@ -7,3 +7,4 @@ build/trayTemplate*.png
 *.log
 .DS_Store
 .vite/
+build/native/

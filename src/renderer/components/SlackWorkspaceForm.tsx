@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { FiPlus, FiCheck, FiEdit3, FiRefreshCw } from 'react-icons/fi';
 import { useAppStore } from '../store/useAppStore';
+import { partitionFor } from '../lib/session';
 
 type Props = {
   onAdded: () => void;
@@ -66,7 +67,9 @@ export function SlackWorkspaceForm({ onAdded }: Props) {
   const runDetect = useCallback(async () => {
     setDetect({ kind: 'loading' });
     try {
-      const r = await window.workOne.scrapeSlackWorkspaces();
+      const r = await window.workOne.scrapeSlackWorkspaces(
+        partitionFor(useAppStore.getState().activeProfileId)
+      );
       if (r.loginRequired) setDetect({ kind: 'login' });
       else if (r.items.length > 0) setDetect({ kind: 'found', items: r.items });
       else setDetect({ kind: 'empty' });

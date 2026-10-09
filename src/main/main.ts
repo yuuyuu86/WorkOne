@@ -9,10 +9,13 @@ import {
   Tray,
   Menu,
   nativeImage,
+  webContents,
 } from 'electron';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import fs from 'node:fs';
+import { OnDeviceAI, aiHelperPath } from './ai';
+import { setupAutoUpdate, installUpdate } from './updater';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -26,6 +29,11 @@ const RESOURCES_DIR = VITE_DEV_SERVER_URL
 
 // アプリ名を明示（開発時の "Electron" 表示や通知タイトルを WorkOne に）
 app.setName('WorkOne');
+
+// 動作確認用: 実データに触れずに起動できるよう、データの保存先を差し替える
+if (process.env.WORKONE_USER_DATA) {
+  app.setPath('userData', process.env.WORKONE_USER_DATA);
+}
 
 // 改名前（MessageDock）のデータを一度だけ新名称（WorkOne）へ移行する。
 // これでログイン・設定・履歴をそのまま引き継ぐ（userData フォルダごとリネーム）。
@@ -87,6 +95,13 @@ const MIN_CHROME_MAJOR = 140;
 
 // 全サービスで共有する Web 表示プロファイル（renderer 側の SHARED_PARTITION と一致）
 const SHARED_PARTITION = 'persist:workone';
+
+// renderer から渡されたパーティション名を検証（WorkOne のプロファイル用のみ許可）
+function safePartition(p: unknown): string {
+  return typeof p === 'string' && /^persist:workone(-[a-z0-9-]+)?$/i.test(p)
+    ? p
+    : SHARED_PARTITION;
+}
 
 function normalizedUserAgent(): string {
   return app.userAgentFallback
@@ -211,7 +226,9 @@ app.on('web-contents-created', (_event, contents) => {
   // すべての webContents（webview / 子ウィンドウ）で、外部アプリを起動する
   // カスタムスキーム（slack:// / zoommtg:// / msteams:// など）への遷移を阻止する。
   // これがないと「ブラウザで使う」つもりでもデスクトップアプリが起動してしまう。
-  const blockExternalScheme = (e: Electron.Event, url: string) => {
+  // Electron 25 以降は URL を event.url で受け取る（第2引数は非推奨）
+  const blockExternalScheme = (e: Electron.Event, legacyUrl?: string) => {
+    const url = (e as unknown as { url?: string }).url ?? legacyUrl ?? '';
     if (!isWebUrl(url)) {
       e.preventDefault();
     }
@@ -231,7 +248,8 @@ app.on('web-contents-created', (_event, contents) => {
         height: 800,
         autoHideMenuBar: true,
         webPreferences: {
-          partition: SHARED_PARTITION,
+          // 開いた webview と同じプロファイル（パーティション）でログインを引き継ぐ
+          session: contents.session,
           contextIsolation: true,
           nodeIntegration: false,
         },
@@ -343,7 +361,7 @@ ipcMain.handle('notify', (_event, title: string, body: string) => {
 // 会議などを「小窓で常駐」させる: 常に最前面の小型ウィンドウで URL を開く。
 // 共有プロファイル(SHARED_PARTITION)を使うので、本体と同じログイン状態を引き継ぐ。
 let pinnedWindow: BrowserWindow | null = null;
-function openPinnedWindow(url: string): boolean {
+function openPinnedWindow(url: string, partition?: string): boolean {
   if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) return false;
   // 既に小窓がある場合は再利用
   if (pinnedWindow && !pinnedWindow.isDestroyed()) {
@@ -360,7 +378,7 @@ function openPinnedWindow(url: string): boolean {
     show: false,
     title: 'WorkOne - 小窓',
     webPreferences: {
-      partition: SHARED_PARTITION, // 共有プロファイルでログイン継続
+      partition: safePartition(partition), // 開いたプロファイルのログインを継続
       contextIsolation: true,
       nodeIntegration: false,
     },
@@ -381,7 +399,9 @@ function openPinnedWindow(url: string): boolean {
 }
 
 // preload 経由でも呼べるよう IPC も用意（将来用）
-ipcMain.handle('open-pinned', (_event, url: string) => openPinnedWindow(url));
+ipcMain.handle('open-pinned', (_event, url: string, partition?: string) =>
+  openPinnedWindow(url, partition)
+);
 
 // データ全消去前の確認ダイアログ（OS ネイティブ）
 ipcMain.handle('confirm-dialog', async (_event, message: string) => {
@@ -485,9 +505,13 @@ function compareVersion(a: string, b: string): number {
   return 0;
 }
 
+// 自動アップデート（署名済みビルドのみ）が有効か
+let autoUpdateEnabled = false;
+
 // 最新版が現在より新しければ {version, url} を返す。無ければ null。
+// 自動アップデートが有効なときは electron-updater 側で通知するので null。
 ipcMain.handle('check-update', async () => {
-  if (!UPDATE_REPO) return null;
+  if (!UPDATE_REPO || autoUpdateEnabled) return null;
   try {
     const res = await fetch(
       `https://api.github.com/repos/${UPDATE_REPO}/releases/latest`,
@@ -503,6 +527,49 @@ ipcMain.handle('check-update', async () => {
   } catch {
     return null;
   }
+});
+
+// ===== オンデバイス AI（Apple Foundation Models） =====
+const onDeviceAI = new OnDeviceAI(aiHelperPath(RESOURCES_DIR));
+
+type AiItem = { id?: string; service: string; title: string; body: string };
+const sanitizeAiItems = (items: unknown): AiItem[] =>
+  (Array.isArray(items) ? items : []).slice(0, 12).map((x: any) => ({
+    id: typeof x?.id === 'string' ? x.id : undefined,
+    service: String(x?.service ?? '').slice(0, 60),
+    title: String(x?.title ?? '').slice(0, 200),
+    body: String(x?.body ?? '').slice(0, 500),
+  }));
+
+ipcMain.handle('ai-status', () => onDeviceAI.status());
+
+ipcMain.handle('ai-triage', async (_event, items: unknown, today: string) => {
+  const r = await onDeviceAI.request('triage', {
+    items: sanitizeAiItems(items),
+    today: String(today ?? '').slice(0, 10),
+  });
+  return { ok: !!r.ok, items: Array.isArray(r.items) ? r.items : [] };
+});
+
+ipcMain.handle('ai-digest', async (_event, items: unknown) => {
+  const r = await onDeviceAI.request('digest', { items: sanitizeAiItems(items) });
+  return { ok: !!r.ok, text: typeof r.text === 'string' ? r.text : '' };
+});
+
+// webview ごとのメモリ使用量（設定画面のパフォーマンス表示用）
+ipcMain.handle('webview-memory', (_event, pairs: unknown) => {
+  const list = Array.isArray(pairs) ? pairs : [];
+  const byPid = new Map(
+    app.getAppMetrics().map((m) => [m.pid, m.memory.workingSetSize] as const)
+  );
+  const out: { id: string; mb: number }[] = [];
+  for (const p of list as { id: string; wcId: number }[]) {
+    const wc = webContents.fromId(Number(p?.wcId));
+    if (!wc || wc.isDestroyed()) continue;
+    const kb = byPid.get(wc.getOSProcessId());
+    if (kb !== undefined) out.push({ id: String(p.id), mb: Math.round(kb / 1024) });
+  }
+  return out;
 });
 
 // 現在のアプリバージョン
@@ -530,6 +597,7 @@ async function scrapeInHiddenWindow<T>(
   url: string,
   extractor: string,
   opts: {
+    partition?: string;
     timeoutMs?: number;
     settleMs?: number;
     expectHost?: string;
@@ -546,7 +614,7 @@ async function scrapeInHiddenWindow<T>(
     width: 1280,
     height: 1000,
     webPreferences: {
-      partition: SHARED_PARTITION,
+      partition: safePartition(opts.partition),
       contextIsolation: true,
       nodeIntegration: false,
       // 背景でも描画を続けてもらう（SPA のレンダリングのため）
@@ -646,11 +714,11 @@ const CLASSROOM_EXTRACTOR = `(() => {
   return out.slice(0, 50);
 })()`;
 
-ipcMain.handle('scrape-classroom', async () => {
+ipcMain.handle('scrape-classroom', async (_event, partition?: string) => {
   return scrapeInHiddenWindow(
     'https://classroom.google.com/a/not-turned-in/all',
     CLASSROOM_EXTRACTOR,
-    { timeoutMs: 18000, expectHost: 'classroom.google.com' }
+    { timeoutMs: 18000, expectHost: 'classroom.google.com', partition }
   );
 });
 
@@ -689,12 +757,12 @@ const SLACK_EXTRACTOR = `(() => {
   } catch (e) { return []; }
 })()`;
 
-ipcMain.handle('scrape-slack-workspaces', async () => {
+ipcMain.handle('scrape-slack-workspaces', async (_event, partition?: string) => {
   return scrapeInHiddenWindow(
     'https://slack.com/signin',
     SLACK_EXTRACTOR,
     // signin ページ自体を読むので、URL の "signin" による未ログイン誤判定を無効化
-    { timeoutMs: 15000, loginCheck: false }
+    { timeoutMs: 15000, loginCheck: false, partition }
   );
 });
 
@@ -881,6 +949,17 @@ function buildAppMenu() {
           accelerator: 'CmdOrCtrl+3',
           click: () => send('menu:view-readlater'),
         },
+        {
+          label: 'タスク',
+          accelerator: 'CmdOrCtrl+4',
+          click: () => send('menu:view-tasks'),
+        },
+        { type: 'separator' },
+        ...Array.from({ length: 9 }, (_, i) => ({
+          label: `プロファイル ${i + 1}`,
+          accelerator: `Ctrl+${i + 1}`,
+          click: () => send(`menu:profile-${i + 1}`),
+        })),
         { type: 'separator' },
         {
           label: '次のサービス',
@@ -925,16 +1004,16 @@ function setupPermissions() {
     'background-sync',
     'geolocation', // 現在地の天気（OS の位置情報サービス）
   ]);
-  const sessions = [
-    session.defaultSession,
-    session.fromPartition(SHARED_PARTITION),
-  ];
-  for (const ses of sessions) {
+  const apply = (ses: Electron.Session) => {
     ses.setPermissionRequestHandler((_wc, permission, callback) => {
       callback(ALLOWED.has(permission));
     });
     ses.setPermissionCheckHandler((_wc, permission) => ALLOWED.has(permission));
-  }
+  };
+  // プロファイルごとのパーティションは後から作られるので、作成時にも適用する
+  app.on('session-created', apply);
+  apply(session.defaultSession);
+  apply(session.fromPartition(SHARED_PARTITION));
 }
 
 app.whenReady().then(() => {
@@ -956,10 +1035,17 @@ app.whenReady().then(() => {
   buildAppMenu();
   createTray();
   createWindow();
+  autoUpdateEnabled = setupAutoUpdate(() => mainWindow);
+});
+
+ipcMain.handle('install-update', () => {
+  isQuitting = true;
+  installUpdate();
 });
 
 app.on('before-quit', () => {
   isQuitting = true;
+  onDeviceAI.dispose();
   saveWindowState();
 });
 

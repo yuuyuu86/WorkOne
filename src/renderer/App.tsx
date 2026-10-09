@@ -3,6 +3,7 @@ import { Sidebar } from './components/Sidebar';
 import { ServiceWebviews } from './components/ServiceWebviews';
 import { TodayView } from './components/TodayView';
 import { InboxView } from './components/InboxView';
+import { TasksView } from './components/TasksView';
 import { ReadLaterView } from './components/ReadLaterView';
 import { FocusModeView } from './components/FocusModeView';
 import { SettingsView } from './components/SettingsView';
@@ -13,7 +14,11 @@ import { WelcomeOverlay } from './components/WelcomeOverlay';
 import { TourOverlay } from './components/TourOverlay';
 import { LogoBurstOverlay } from './components/LogoBurstOverlay';
 import { UpdateBanner } from './components/UpdateBanner';
-import { useAppStore } from './store/useAppStore';
+import { GlobalTooltip } from './components/GlobalTooltip';
+import { useAppStore, useActiveProfile, profileOf } from './store/useAppStore';
+import { profileForSchedule } from './lib/schedule';
+import { useInboxAi } from './lib/useInboxAi';
+import { useTaskReminders } from './lib/useTaskReminders';
 import { isWithinDnd } from './lib/dnd';
 
 export default function App() {
@@ -28,6 +33,8 @@ export default function App() {
   const dndEnabled = useAppStore((s) => s.dndEnabled);
   const dndStart = useAppStore((s) => s.dndStart);
   const dndEnd = useAppStore((s) => s.dndEnd);
+  const activeProfile = useActiveProfile();
+  const profileAutoSwitch = useAppStore((s) => s.profileAutoSwitch);
   const [showAdd, setShowAdd] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
@@ -101,6 +108,31 @@ export default function App() {
     const t = setInterval(evaluate, 30000);
     return () => clearInterval(t);
   }, [dndEnabled, dndStart, dndEnd]);
+
+  // 時間割に合わせてプロファイルを自動で切り替え、スヌーズ期限の来た通知を戻す。
+  // 手動で切り替えた場合は、次に時間帯の境目をまたぐまで上書きしない。
+  useEffect(() => {
+    let lastScheduled: string | null = null;
+    const tick = () => {
+      const st = useAppStore.getState();
+      st.wakeSnoozed();
+      if (!st.profileAutoSwitch) return;
+      const target = profileForSchedule(st.profiles, new Date());
+      if (target !== lastScheduled) {
+        lastScheduled = target;
+        if (target) st.setActiveProfile(target);
+      }
+    };
+    tick();
+    const t = setInterval(tick, 30000);
+    return () => clearInterval(t);
+  }, [profileAutoSwitch]);
+
+  // 新着通知の重要度スコア・AI 要約・タスク候補の抽出
+  useInboxAi();
+  // 時刻つきタスクのリマインダー
+  useTaskReminders();
+
   // Cmd/Ctrl+K はメニューのアクセラレータで処理（webview にフォーカスがあっても効くため）
 
   // メニュー/キーボードショートカットのコマンドを処理
@@ -131,9 +163,14 @@ export default function App() {
         case 'view-readlater':
           store.setView('readLater');
           break;
+        case 'view-tasks':
+          store.setView('tasks');
+          break;
         case 'next-service':
         case 'prev-service': {
-          const list = store.services;
+          const list = store.services.filter(
+            (s) => profileOf(s) === store.activeProfileId
+          );
           if (list.length === 0) break;
           const idx = list.findIndex((s) => s.id === store.activeServiceId);
           const delta = command === 'next-service' ? 1 : -1;
@@ -142,6 +179,15 @@ export default function App() {
               ? 0
               : (idx + delta + list.length) % list.length;
           store.openService(list[nextIdx].id);
+          break;
+        }
+        default: {
+          // profile-1 〜 profile-9（⌃1〜9）
+          const m = /^profile-(\d)$/.exec(command);
+          if (m) {
+            const p = store.profiles[Number(m[1]) - 1];
+            if (p) store.setActiveProfile(p.id);
+          }
           break;
         }
         // webview 操作はアクティブな ServiceFrame に委譲
@@ -173,6 +219,8 @@ export default function App() {
         return <TodayView onOpenAdd={() => setShowAdd(true)} />;
       case 'inbox':
         return <InboxView onOpenAdd={() => setShowAdd(true)} />;
+      case 'tasks':
+        return <TasksView />;
       case 'readLater':
         return <ReadLaterView />;
       case 'focus':
@@ -189,6 +237,7 @@ export default function App() {
       className={`app${sidebarAutoHide ? ' sidebar-autohide' : ''}${
         sidebarAutoHide && sidebarRevealed ? ' sidebar-revealed' : ''
       }`}
+      style={{ ['--profile-color' as string]: activeProfile.color }}
     >
       {sidebarAutoHide && (
         <div
@@ -233,6 +282,7 @@ export default function App() {
           }}
         />
       )}
+      <GlobalTooltip />
       {showLogoBurst && (
         <LogoBurstOverlay onDone={() => setShowLogoBurst(false)} />
       )}

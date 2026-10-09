@@ -12,8 +12,14 @@ import {
   FiChevronDown,
   FiChevronRight,
   FiHelpCircle,
+  FiCheckSquare,
 } from 'react-icons/fi';
-import { useAppStore, type ViewKey } from '../store/useAppStore';
+import {
+  useAppStore,
+  useProfileServices,
+  type ViewKey,
+} from '../store/useAppStore';
+import { ProfileSwitcher } from './ProfileSwitcher';
 import {
   CATEGORY_LABELS,
   CATEGORY_ORDER,
@@ -40,7 +46,12 @@ export function Sidebar({
   const setSidebarWidth = useAppStore((s) => s.setSidebarWidth);
   const activeView = useAppStore((s) => s.activeView);
   const activeServiceId = useAppStore((s) => s.activeServiceId);
-  const services = useAppStore((s) => s.services);
+  const allServices = useAppStore((s) => s.services);
+  const services = useProfileServices();
+  const tasksOpen = useAppStore(
+    (s) =>
+      s.tasks.filter((t) => !t.done && t.profileId === s.activeProfileId).length
+  );
   const focusMode = useAppStore((s) => s.focusMode);
   const focusServiceIds = useAppStore((s) => s.focusServiceIds);
   const readLater = useAppStore((s) => s.readLater);
@@ -52,13 +63,29 @@ export function Sidebar({
   const collapsedCategories = useAppStore((s) => s.collapsedCategories);
   const toggleCategoryCollapsed = useAppStore((s) => s.toggleCategoryCollapsed);
   const unreadNotifications = useAppStore(
-    (s) => s.notifications.filter((n) => !n.read).length
+    (s) => s.notifications.filter((n) => !n.read && !n.done && !n.snoozedUntil).length
   );
 
   // ドラッグ並び替え（通常モードのみ。集中モードは表示が絞られるため無効）。
   // id ベースで扱う（グループ表示でも崩れないように）。
   const [dragId, setDragId] = useState<string | null>(null);
   const canReorder = focusMode === 'normal';
+
+  // プロファイル切り替え時に、Arc のように中身を横にスライドさせる
+  const activeProfileId = useAppStore((s) => s.activeProfileId);
+  const profiles = useAppStore((s) => s.profiles);
+  const prevProfileRef = useRef(activeProfileId);
+  const [switching, setSwitching] = useState<'left' | 'right' | null>(null);
+  useEffect(() => {
+    const prev = prevProfileRef.current;
+    if (prev === activeProfileId) return;
+    prevProfileRef.current = activeProfileId;
+    const from = profiles.findIndex((p) => p.id === prev);
+    const to = profiles.findIndex((p) => p.id === activeProfileId);
+    setSwitching(to >= from ? 'right' : 'left');
+    const t = setTimeout(() => setSwitching(null), 300);
+    return () => clearTimeout(t);
+  }, [activeProfileId, profiles]);
 
   // 小ネタ: 未読バッジが増えた瞬間だけ軽くバウンスさせる
   const prevBadgesRef = useRef<Record<string, number>>({});
@@ -125,8 +152,8 @@ export function Sidebar({
     }
     const dragged = services.find((s) => s.id === dragId);
     if (dragged && (!sidebarGrouped || dragged.category === target.category)) {
-      const from = services.findIndex((s) => s.id === dragId);
-      const to = services.findIndex((s) => s.id === target.id);
+      const from = allServices.findIndex((s) => s.id === dragId);
+      const to = allServices.findIndex((s) => s.id === target.id);
       if (from >= 0 && to >= 0) reorderServices(from, to);
     }
     setDragId(null);
@@ -280,8 +307,11 @@ export function Sidebar({
 
   return (
     <aside
-      className="sidebar"
-      style={{ width: sidebarWidth }}
+      className={`sidebar ${switching ? 'profile-switching' : ''}`}
+      style={{
+        width: sidebarWidth,
+        ['--slide-from' as string]: switching === 'left' ? '-14px' : '14px',
+      }}
       onMouseLeave={onMouseLeave}
     >
       <div className="sidebar-header" onClick={handleLogoClick}>
@@ -310,6 +340,12 @@ export function Sidebar({
           'Inbox',
           <FiInbox size={16} />,
           unreadNotifications ? String(unreadNotifications) : undefined
+        )}
+        {navItem(
+          'tasks',
+          'タスク',
+          <FiCheckSquare size={16} />,
+          tasksOpen ? String(tasksOpen) : undefined
         )}
         {navItem(
           'readLater',
@@ -376,6 +412,8 @@ export function Sidebar({
         <span className="nav-label">ショートカット</span>
         <span className="nav-badge">?</span>
       </button>
+
+      <ProfileSwitcher />
 
       <div
         className={`sidebar-resizer ${resizing ? 'active' : ''}`}

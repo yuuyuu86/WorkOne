@@ -20,8 +20,8 @@ const api = {
     ipcRenderer.invoke('notify', title, body),
 
   /** 会議などを常に最前面の小窓で開く */
-  openPinned: (url: string): Promise<boolean> =>
-    ipcRenderer.invoke('open-pinned', url),
+  openPinned: (url: string, partition?: string): Promise<boolean> =>
+    ipcRenderer.invoke('open-pinned', url, partition),
 
   /** Dock / タスクバーのバッジに合計未読数を設定 */
   setBadge: (count: number): Promise<boolean> =>
@@ -63,6 +63,8 @@ const api = {
       'menu:view-today',
       'menu:view-inbox',
       'menu:view-readlater',
+      'menu:view-tasks',
+      ...Array.from({ length: 9 }, (_, i) => `menu:profile-${i + 1}`),
       'menu:next-service',
       'menu:prev-service',
       'menu:shortcuts',
@@ -79,20 +81,59 @@ const api = {
   platform: process.platform,
 
   /** ログイン済みセッションを使って Classroom の課題を読み取る（DOM 取得）。 */
-  scrapeClassroom: (): Promise<{
+  scrapeClassroom: (partition?: string): Promise<{
     ok: boolean;
     loginRequired: boolean;
     unavailable: boolean;
     items: { title: string; href: string; due: string; course: string }[];
-  }> => ipcRenderer.invoke('scrape-classroom'),
+  }> => ipcRenderer.invoke('scrape-classroom', partition),
 
   /** ログイン済みセッションを使って、所属している Slack ワークスペース一覧を検出する。 */
-  scrapeSlackWorkspaces: (): Promise<{
+  scrapeSlackWorkspaces: (partition?: string): Promise<{
     ok: boolean;
     loginRequired: boolean;
     unavailable: boolean;
     items: { url: string; name: string }[];
-  }> => ipcRenderer.invoke('scrape-slack-workspaces'),
+  }> => ipcRenderer.invoke('scrape-slack-workspaces', partition),
+
+  /** webview ごとのメモリ使用量（MB）。pairs は serviceId と webContentsId の対応 */
+  webviewMemory: (
+    pairs: { id: string; wcId: number }[]
+  ): Promise<{ id: string; mb: number }[]> =>
+    ipcRenderer.invoke('webview-memory', pairs),
+
+  /** 自動アップデート: 状態を購読（戻り値で解除） */
+  onUpdateStatus: (
+    cb: (s: { state: 'available' | 'downloading' | 'ready' | 'error'; version?: string; percent?: number }) => void
+  ): (() => void) => {
+    const h = (_e: unknown, s: any) => cb(s);
+    ipcRenderer.on('update-status', h);
+    return () => ipcRenderer.removeListener('update-status', h);
+  },
+  /** ダウンロード済みのアップデートを適用して再起動 */
+  installUpdate: (): Promise<void> => ipcRenderer.invoke('install-update'),
+
+  /** オンデバイス AI（Apple Foundation Models）。データは Mac の外に出ない */
+  ai: {
+    status: (): Promise<{ available: boolean; reason?: string }> =>
+      ipcRenderer.invoke('ai-status'),
+    triage: (
+      items: { id: string; service: string; title: string; body: string }[],
+      today: string
+    ): Promise<{
+      ok: boolean;
+      items: {
+        id: string;
+        score: number;
+        summary: string;
+        task?: { title: string; due?: string };
+      }[];
+    }> => ipcRenderer.invoke('ai-triage', items, today),
+    digest: (
+      items: { service: string; title: string; body: string }[]
+    ): Promise<{ ok: boolean; text: string }> =>
+      ipcRenderer.invoke('ai-digest', items),
+  },
 
 };
 

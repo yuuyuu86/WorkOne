@@ -9,11 +9,13 @@ import {
   FiStar,
   FiBellOff,
 } from 'react-icons/fi';
+import { SettingsV2Sections } from './SettingsV2Sections';
+import { LuPin } from 'react-icons/lu';
 import { useAppStore } from '../store/useAppStore';
 import { CATEGORY_LABELS, type Service } from '../types/service';
 import { ServiceIcon } from './ServiceIcon';
 import { confirmAction } from '../lib/confirm';
-import { SHARED_PARTITION } from '../lib/session';
+import { partitionFor } from '../lib/session';
 import { CustomServiceForm } from './CustomServiceForm';
 import { geocodeCity, getPreciseLocation, detectLocation } from '../lib/weather';
 import { fileToResizedDataUrl } from '../lib/image';
@@ -21,6 +23,9 @@ import { fileToResizedDataUrl } from '../lib/image';
 export function SettingsView() {
   const [editing, setEditing] = useState<Service | null>(null);
   const services = useAppStore((s) => s.services);
+  const profiles = useAppStore((s) => s.profiles);
+  const moveServiceToProfile = useAppStore((s) => s.moveServiceToProfile);
+  const setServiceKeepAlive = useAppStore((s) => s.setServiceKeepAlive);
   const focusServiceIds = useAppStore((s) => s.focusServiceIds);
   const notificationsEnabled = useAppStore((s) => s.notificationsEnabled);
   const setNotificationsEnabled = useAppStore((s) => s.setNotificationsEnabled);
@@ -170,7 +175,9 @@ export function SettingsView() {
       'すべてのサービスのキャッシュとログインセッションを削除しますか？各サービスからログアウトされ、次回開いたときに再ログインが必要になります。'
     );
     if (!ok) return;
-    const partitions = [SHARED_PARTITION];
+    const partitions = useAppStore
+      .getState()
+      .profiles.map((p) => partitionFor(p.id));
     const api = (window as any).workOne;
     if (api?.clearWebCache) {
       await api.clearWebCache(partitions);
@@ -219,6 +226,26 @@ export function SettingsView() {
                     {svc.isCustom ? '・カスタム' : ''}
                   </div>
                 </div>
+                <select
+                  className="profile-select"
+                  value={svc.profileId ?? 'default'}
+                  title="所属プロファイル（移動するとログインし直しが必要です）"
+                  onChange={(e) => moveServiceToProfile(svc.id, e.target.value)}
+                >
+                  {profiles.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  className="icon-btn"
+                  title={svc.keepAlive ? '常駐を解除（休止の対象にする）' : '常駐させる（休止しない）'}
+                  onClick={() => setServiceKeepAlive(svc.id, !svc.keepAlive)}
+                  style={{ color: svc.keepAlive ? 'var(--accent)' : undefined }}
+                >
+                  <LuPin size={15} fill={svc.keepAlive ? 'currentColor' : 'none'} />
+                </button>
                 <label
                   className="muted"
                   style={{ display: 'flex', alignItems: 'center', gap: 6 }}
@@ -294,6 +321,8 @@ export function SettingsView() {
           並び替えは矢印ボタンで行います。「集中」のチェックは集中モードでの表示対象です。
         </p>
       </div>
+
+      <SettingsV2Sections />
 
       <div className="section">
         <h3 className="section-title">外観</h3>

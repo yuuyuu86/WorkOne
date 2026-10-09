@@ -1,13 +1,30 @@
-import { useState } from 'react';
-import { FiInfo, FiPlus, FiCheck, FiTrash2, FiBell, FiStar } from 'react-icons/fi';
-import { useAppStore } from '../store/useAppStore';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  FiPlus,
+  FiCheck,
+  FiTrash2,
+  FiBell,
+  FiStar,
+  FiClock,
+  FiCheckSquare,
+  FiBookmark,
+  FiCpu,
+  FiRotateCcw,
+  FiX,
+  FiLayers,
+  FiCheckCircle,
+} from 'react-icons/fi';
+import { useAppStore, profileOf } from '../store/useAppStore';
+import type { AppNotification } from '../types/service';
 import { ServiceIcon } from './ServiceIcon';
+import { TaskQuickAdd } from './TaskQuickAdd';
 
 type Props = {
   onOpenAdd: () => void;
 };
 
-type Filter = 'all' | 'unread' | 'important' | string; // string = serviceId
+type Filter = 'open' | 'unread' | 'important' | 'snoozed' | 'done';
+type Sort = 'priority' | 'newest';
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -19,120 +36,476 @@ function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString('ja-JP');
 }
 
+/** スヌーズの選択肢（いまからの時刻を返す） */
+const SNOOZE_OPTIONS: { label: string; at: () => Date }[] = [
+  { label: '1時間後', at: () => new Date(Date.now() + 3600000) },
+  {
+    label: '今夜 19:00',
+    at: () => {
+      const d = new Date();
+      d.setHours(19, 0, 0, 0);
+      if (d.getTime() <= Date.now()) d.setDate(d.getDate() + 1);
+      return d;
+    },
+  },
+  {
+    label: '明日 8:00',
+    at: () => {
+      const d = new Date();
+      d.setDate(d.getDate() + 1);
+      d.setHours(8, 0, 0, 0);
+      return d;
+    },
+  },
+  {
+    label: '来週 月曜 8:00',
+    at: () => {
+      const d = new Date();
+      d.setDate(d.getDate() + (((8 - d.getDay()) % 7) || 7));
+      d.setHours(8, 0, 0, 0);
+      return d;
+    },
+  },
+];
+
+const isOpen = (n: AppNotification) => !n.done && !n.snoozedUntil;
+
+/** AI 要約の末尾の句点などを落として見出し向きにする */
+const cleanSentence = (t: string) => t.trim().replace(/[。.]+$/, '');
+
 export function InboxView({ onOpenAdd }: Props) {
   const services = useAppStore((s) => s.services);
   const notifications = useAppStore((s) => s.notifications);
-  const serviceBadges = useAppStore((s) => s.serviceBadges);
+  const activeProfileId = useAppStore((s) => s.activeProfileId);
+  const aiEnabled = useAppStore((s) => s.aiEnabled);
   const openService = useAppStore((s) => s.openService);
   const markNotificationRead = useAppStore((s) => s.markNotificationRead);
   const markAllNotificationsRead = useAppStore((s) => s.markAllNotificationsRead);
+  const markNotificationDone = useAppStore((s) => s.markNotificationDone);
+  const snoozeNotification = useAppStore((s) => s.snoozeNotification);
+  const setNotificationMeta = useAppStore((s) => s.setNotificationMeta);
   const removeNotification = useAppStore((s) => s.removeNotification);
   const clearNotifications = useAppStore((s) => s.clearNotifications);
+  const addReadLater = useAppStore((s) => s.addReadLater);
 
-  const [filter, setFilter] = useState<Filter>('all');
+  const [filter, setFilter] = useState<Filter>('open');
+  const [sort, setSort] = useState<Sort>('priority');
+  const [serviceFilter, setServiceFilter] = useState('');
+  const [allProfiles, setAllProfiles] = useState(false);
+  const [cursor, setCursor] = useState(0);
+  const [snoozeFor, setSnoozeFor] = useState<string | null>(null);
+  const [taskFor, setTaskFor] = useState<AppNotification | null>(null);
+  const [digest, setDigest] = useState<{ text: string; loading: boolean } | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
-  const importantCount = notifications.filter((n) => n.important).length;
+  // プロファイルで絞る（サービスが消えた通知は既定プロファイル扱い）
+  const scoped = useMemo(() => {
+    if (allProfiles) return notifications;
+    return notifications.filter((n) => {
+      const svc = services.find((s) => s.id === n.serviceId);
+      return (svc ? profileOf(svc) : 'default') === activeProfileId;
+    });
+  }, [notifications, services, allProfiles, activeProfileId]);
 
-  // フィルタ適用
-  const shown = notifications.filter((n) => {
-    if (filter === 'all') return true;
-    if (filter === 'unread') return !n.read;
-    if (filter === 'important') return n.important;
-    return n.serviceId === filter; // サービス別
-  });
+  const openList = scoped.filter(isOpen);
+  const unreadCount = openList.filter((n) => !n.read).length;
+  const importantCount = openList.filter((n) => n.important).length;
+  const snoozedCount = scoped.filter((n) => n.snoozedUntil && !n.done).length;
+  const doneCount = scoped.filter((n) => n.done).length;
 
-  // 通知が存在するサービス（フィルタ用）
-  const notifServiceIds = Array.from(
-    new Set(notifications.map((n) => n.serviceId))
+  const shown = useMemo(() => {
+    const list = scoped.filter((n) => {
+      if (serviceFilter && n.serviceId !== serviceFilter) return false;
+      if (filter === 'open') return isOpen(n);
+      if (filter === 'unread') return isOpen(n) && !n.read;
+      if (filter === 'important') return isOpen(n) && n.important;
+      if (filter === 'snoozed') return !!n.snoozedUntil && !n.done;
+      return !!n.done;
+    });
+    if (sort === 'priority' && filter !== 'done') {
+      return [...list].sort(
+        (a, b) => (b.score ?? 0) - (a.score ?? 0) || b.receivedAt.localeCompare(a.receivedAt)
+      );
+    }
+    return list;
+  }, [scoped, filter, sort, serviceFilter]);
+
+  // 今日対応が必要な上位3件（未読・未完了をスコア順）
+  const top3 = useMemo(
+    () =>
+      [...openList]
+        .filter((n) => (n.score ?? 0) >= 50)
+        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+        .slice(0, 3),
+    [openList]
   );
 
-  const openFromNotification = (serviceId: string, id: string) => {
-    markNotificationRead(id);
-    if (services.some((s) => s.id === serviceId)) openService(serviceId);
+  const notifServiceIds = Array.from(new Set(openList.map((n) => n.serviceId)));
+
+  useEffect(() => {
+    if (cursor >= shown.length) setCursor(Math.max(0, shown.length - 1));
+  }, [shown.length, cursor]);
+
+  const openFrom = (n: AppNotification) => {
+    markNotificationRead(n.id);
+    if (services.some((s) => s.id === n.serviceId)) {
+      const svc = services.find((s) => s.id === n.serviceId)!;
+      // 別プロファイルのサービスならプロファイルも切り替える
+      useAppStore.getState().setActiveProfile(profileOf(svc));
+      openService(n.serviceId);
+    }
   };
+
+  const toReadLater = (n: AppNotification) => {
+    const svc = services.find((s) => s.id === n.serviceId);
+    addReadLater({
+      title: n.title,
+      url: useAppStore.getState().serviceUrls[n.serviceId] ?? svc?.url ?? '',
+      serviceName: n.serviceName,
+      note: n.body,
+    });
+    markNotificationDone(n.id);
+  };
+
+  // キーボード操作: j/k 移動, Enter 開く, e 完了, s スヌーズ, t タスク化, l あとで見る, # 削除
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = document.activeElement as HTMLElement | null;
+      if (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (taskFor || snoozeFor) return;
+      const n = shown[cursor];
+      switch (e.key) {
+        case 'j':
+        case 'ArrowDown':
+          setCursor((c) => Math.min(shown.length - 1, c + 1));
+          break;
+        case 'k':
+        case 'ArrowUp':
+          setCursor((c) => Math.max(0, c - 1));
+          break;
+        case 'Enter':
+          if (n) openFrom(n);
+          break;
+        case 'e':
+          if (n) markNotificationDone(n.id);
+          break;
+        case 's':
+          if (n) setSnoozeFor(n.id);
+          break;
+        case 't':
+          if (n) setTaskFor(n);
+          break;
+        case 'l':
+          if (n) toReadLater(n);
+          break;
+        case '#':
+          if (n) removeNotification(n.id);
+          break;
+        default:
+          return;
+      }
+      e.preventDefault();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
+  useEffect(() => {
+    listRef.current
+      ?.querySelector<HTMLElement>(`[data-idx="${cursor}"]`)
+      ?.scrollIntoView({ block: 'nearest' });
+  }, [cursor]);
+
+  const runDigest = async () => {
+    const ai = window.workOne?.ai;
+    if (!ai) return;
+    setDigest({ text: '', loading: true });
+    const items = [...openList]
+      .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+      .slice(0, 12)
+      .map((n) => ({ service: n.serviceName, title: n.title, body: n.body.slice(0, 200) }));
+    const r = await ai.digest(items).catch(() => null);
+    setDigest({
+      text: r?.ok ? r.text : 'オンデバイス AI を利用できませんでした（設定 → AI を確認してください）。',
+      loading: false,
+    });
+  };
+
+  const row = (n: AppNotification, idx: number) => (
+    <div
+      className={`list-row inbox-row ${idx === cursor ? 'cursor' : ''} ${n.read ? '' : 'unread'}`}
+      key={n.id}
+      data-idx={idx}
+      onClick={() => {
+        setCursor(idx);
+        openFrom(n);
+      }}
+    >
+      <ServiceIcon iconKey={n.icon} chip={28} />
+      <div className="grow">
+        <div className="row-title">
+          {n.important && (
+            <FiStar size={12} fill="#FFB300" style={{ color: '#FFB300', marginRight: 5 }} />
+          )}
+          {n.title}
+          <span className="muted" style={{ marginLeft: 8, fontWeight: 400 }}>
+            {n.serviceName}
+          </span>
+        </div>
+        {n.summary ? (
+          <div className="row-sub">
+            <FiCpu size={11} style={{ marginRight: 4 }} />
+            {cleanSentence(n.summary)}
+          </div>
+        ) : (
+          n.body && <div className="row-sub">{n.body}</div>
+        )}
+        {n.taskSuggestion && !n.done && (
+          <button
+            className="task-suggestion"
+            onClick={(e) => {
+              e.stopPropagation();
+              setTaskFor(n);
+            }}
+          >
+            <FiCheckSquare size={11} /> タスク候補: {n.taskSuggestion.title}
+            {n.taskSuggestion.due && `（${n.taskSuggestion.due.slice(5).replace('-', '/')}）`}
+          </button>
+        )}
+      </div>
+      {n.score !== undefined && filter !== 'done' && (
+        <span className={`score-pill ${n.score >= 70 ? 'high' : n.score >= 50 ? 'mid' : ''}`} title="重要度スコア（0〜100）">
+          {n.score}
+        </span>
+      )}
+      <span className="muted" style={{ flexShrink: 0 }}>
+        {n.snoozedUntil
+          ? `${new Date(n.snoozedUntil).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`
+          : timeAgo(n.receivedAt)}
+      </span>
+      <div className="row-actions" onClick={(e) => e.stopPropagation()}>
+        {n.done || n.snoozedUntil ? (
+          <button
+            className="icon-btn"
+            title="受信箱に戻す（未処理に戻す）"
+            onClick={() => {
+              useAppStore.setState({
+                notifications: useAppStore
+                  .getState()
+                  .notifications.map((x) =>
+                    x.id === n.id ? { ...x, done: false, snoozedUntil: undefined } : x
+                  ),
+              });
+            }}
+          >
+            <FiRotateCcw size={14} />
+          </button>
+        ) : (
+          <>
+            <button className="icon-btn" title="完了 (e)" onClick={() => markNotificationDone(n.id)}>
+              <FiCheck size={14} />
+            </button>
+            <div style={{ position: 'relative' }}>
+              <button className="icon-btn" title="スヌーズ・あとで再表示 (s)" onClick={() => setSnoozeFor(n.id)}>
+                <FiClock size={14} />
+              </button>
+              {snoozeFor === n.id && (
+                <div className="snooze-menu" onMouseLeave={() => setSnoozeFor(null)}>
+                  {SNOOZE_OPTIONS.map((o, i) => (
+                    <button
+                      key={o.label}
+                      onClick={() => {
+                        snoozeNotification(n.id, o.at().toISOString());
+                        setSnoozeFor(null);
+                      }}
+                    >
+                      <kbd>{i + 1}</kbd> {o.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button className="icon-btn" title="タスクに追加 (t)" onClick={() => setTaskFor(n)}>
+              <FiCheckSquare size={14} />
+            </button>
+            <button className="icon-btn" title="あとで見る (l)" onClick={() => toReadLater(n)}>
+              <FiBookmark size={14} />
+            </button>
+          </>
+        )}
+        <button className="icon-btn" title="通知を削除 (#)" onClick={() => removeNotification(n.id)}>
+          <FiTrash2 size={14} />
+        </button>
+      </div>
+    </div>
+  );
+
+  // スヌーズメニュー表示中は 1〜4 キーで選択
+  useEffect(() => {
+    if (!snoozeFor) return;
+    const onKey = (e: KeyboardEvent) => {
+      const i = Number(e.key) - 1;
+      if (i >= 0 && i < SNOOZE_OPTIONS.length) {
+        snoozeNotification(snoozeFor, SNOOZE_OPTIONS[i].at().toISOString());
+        setSnoozeFor(null);
+        e.preventDefault();
+      } else if (e.key === 'Escape') setSnoozeFor(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [snoozeFor, snoozeNotification]);
 
   return (
     <div className="content-scroll">
       <div className="page-header">
         <h2>Inbox</h2>
-        <p>各サービスの通知をまとめて表示します。</p>
+        <p>
+          各サービスの通知をまとめ、重要度順に並べます。<kbd>j</kbd>/<kbd>k</kbd> 移動・
+          <kbd>e</kbd> 完了・<kbd>s</kbd> スヌーズ・<kbd>t</kbd> タスク化・<kbd>l</kbd> あとで見る
+        </p>
       </div>
 
-      <div className="info-banner">
-        <FiInfo size={18} className="info-icon" />
-        <div>
-          各サービスが出す通知（Gmail / Slack / Calendar など）を 1
-          か所に集約しています。通知を表示するには、各サービスの設定で「デスクトップ通知」を
-          オンにし、そのサービスを一度開いておいてください。通知の内容はメモリ上だけで保持し、
-          保存はしません。
+      {top3.length > 0 && filter === 'open' && (
+        <div className="section">
+          <div className="card focus3-card">
+            <div className="focus3-head">
+              <div className="focus3-title">
+                <span>今日対応が必要</span>
+                <span className="section-count">{top3.length}</span>
+              </div>
+              {aiEnabled && (
+                <button
+                  className="btn btn-sm btn-ghost"
+                  onClick={runDigest}
+                  disabled={digest?.loading}
+                  title="オンデバイス AI で要点をまとめる"
+                >
+                  <FiCpu size={13} /> {digest?.loading ? 'まとめています…' : 'AI でまとめる'}
+                </button>
+              )}
+            </div>
+
+            {digest?.text && (
+              <div className="digest-panel">
+                <div className="digest-label">
+                  <FiCpu size={12} /> AI のまとめ
+                  <button className="icon-btn" title="閉じる" onClick={() => setDigest(null)}>
+                    <FiX size={12} />
+                  </button>
+                </div>
+                <ul>
+                  {digest.text
+                    .split('\n')
+                    .map((l) => l.replace(/^\s*[・\-*•]\s*/, '').trim())
+                    .filter(Boolean)
+                    .map((l, i) => (
+                      <li key={i}>{l}</li>
+                    ))}
+                </ul>
+              </div>
+            )}
+
+            <div className="focus3-list">
+              {top3.map((n, i) => (
+                <div key={n.id} className="focus3-item" onClick={() => openFrom(n)}>
+                  <span className="focus3-rank">{i + 1}</span>
+                  <ServiceIcon iconKey={n.icon} chip={26} />
+                  <div className="focus3-body">
+                    <div className="focus3-text">{cleanSentence(n.summary || n.title)}</div>
+                    <div className="focus3-meta">
+                      {n.serviceName}・{timeAgo(n.receivedAt)}
+                    </div>
+                  </div>
+                  <div className="focus3-actions" onClick={(e) => e.stopPropagation()}>
+                    <button className="btn btn-sm btn-ghost" title="タスク化 (t)" onClick={() => setTaskFor(n)}>
+                      <FiCheckSquare size={13} /> タスク化
+                    </button>
+                    <button className="btn btn-sm" title="完了 (e)" onClick={() => markNotificationDone(n.id)}>
+                      <FiCheck size={13} /> 完了
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="section">
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: 12,
-          }}
-        >
-          <h3 className="section-title" style={{ margin: 0 }}>
-            通知{unreadCount > 0 ? `（未読 ${unreadCount}）` : ''}
-          </h3>
-          {notifications.length > 0 && (
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn btn-sm" onClick={markAllNotificationsRead}>
-                <FiCheck size={13} /> すべて既読
+        {scoped.length > 0 && (
+          <div className="inbox-toolbar">
+            <div className="view-tabs" role="tablist">
+              {(
+                [
+                  ['open', '受信箱', openList.length],
+                  ['unread', '未読', unreadCount],
+                  ['important', '重要', importantCount],
+                  ['snoozed', 'スヌーズ中', snoozedCount],
+                  ['done', '完了', doneCount],
+                ] as [Filter, string, number][]
+              )
+                .filter(([k, , n]) => k === 'open' || k === 'unread' || n > 0 || filter === k)
+                .map(([k, label, n]) => (
+                  <button
+                    key={k}
+                    role="tab"
+                    aria-selected={filter === k}
+                    className={`view-tab ${filter === k ? 'active' : ''}`}
+                    onClick={() => setFilter(k)}
+                  >
+                    {label}
+                    {n > 0 && <span className="view-tab-count">{n}</span>}
+                  </button>
+                ))}
+            </div>
+
+            <div className="toolbar-controls">
+              {notifServiceIds.length > 1 && (
+                <select
+                  className="toolbar-select"
+                  value={serviceFilter}
+                  onChange={(e) => setServiceFilter(e.target.value)}
+                  title="サービスで絞り込み"
+                >
+                  <option value="">すべてのサービス</option>
+                  {notifServiceIds.map((sid) => {
+                    const svc = services.find((x) => x.id === sid);
+                    return svc ? (
+                      <option key={sid} value={sid}>
+                        {svc.name}
+                      </option>
+                    ) : null;
+                  })}
+                </select>
+              )}
+              <select
+                className="toolbar-select"
+                value={sort}
+                onChange={(e) => setSort(e.target.value as Sort)}
+                title="並び順"
+              >
+                <option value="priority">重要度順</option>
+                <option value="newest">新着順</option>
+              </select>
+              <button
+                className={`icon-btn toolbar-toggle ${allProfiles ? 'on' : ''}`}
+                title={allProfiles ? '全プロファイルの通知を表示中' : 'このプロファイルの通知だけを表示中'}
+                onClick={() => setAllProfiles((v) => !v)}
+              >
+                <FiLayers size={15} />
               </button>
-              <button className="btn btn-sm" onClick={clearNotifications}>
-                <FiTrash2 size={13} /> クリア
+              <button className="icon-btn" title="すべて既読にする" onClick={markAllNotificationsRead}>
+                <FiCheckCircle size={15} />
+              </button>
+              <button className="icon-btn" title="通知をすべてクリア" onClick={clearNotifications}>
+                <FiTrash2 size={15} />
               </button>
             </div>
-          )}
-        </div>
-
-        {/* フィルタ */}
-        {notifications.length > 0 && (
-          <div className="filter-chips">
-            <button
-              className={`chip ${filter === 'all' ? 'active' : ''}`}
-              onClick={() => setFilter('all')}
-            >
-              すべて
-            </button>
-            <button
-              className={`chip ${filter === 'unread' ? 'active' : ''}`}
-              onClick={() => setFilter('unread')}
-            >
-              未読 {unreadCount}
-            </button>
-            {importantCount > 0 && (
-              <button
-                className={`chip ${filter === 'important' ? 'active' : ''}`}
-                onClick={() => setFilter('important')}
-              >
-                重要 {importantCount}
-              </button>
-            )}
-            {notifServiceIds.map((sid) => {
-              const svc = services.find((s) => s.id === sid);
-              if (!svc) return null;
-              return (
-                <button
-                  key={sid}
-                  className={`chip ${filter === sid ? 'active' : ''}`}
-                  onClick={() => setFilter(sid)}
-                >
-                  {svc.name}
-                </button>
-              );
-            })}
           </div>
         )}
 
-        {notifications.length === 0 ? (
+        {scoped.length === 0 ? (
           <div className="empty-state">
             <FiBell size={36} className="empty-icon" />
             <h3>通知はまだありません</h3>
@@ -140,98 +513,38 @@ export function InboxView({ onOpenAdd }: Props) {
               サービスを開いて通知が届くと、ここに集約されます。各サービスの
               「デスクトップ通知」をオンにしてください。
             </p>
+            {services.length === 0 && (
+              <button className="btn btn-primary" onClick={onOpenAdd}>
+                <FiPlus size={14} /> サービスを追加
+              </button>
+            )}
           </div>
         ) : shown.length === 0 ? (
           <div className="empty-state">
-            <FiBell size={32} className="empty-icon" />
-            <p>この絞り込みに一致する通知はありません。</p>
+            <FiCheck size={32} className="empty-icon" />
+            <p>{filter === 'open' ? '受信箱ゼロ！すべて片付きました。' : 'この絞り込みに一致する通知はありません。'}</p>
           </div>
         ) : (
-          <div className="card">
-            {shown.map((n) => (
-              <div
-                className="list-row"
-                key={n.id}
-                style={{
-                  cursor: 'pointer',
-                  background: n.read ? undefined : 'var(--accent-soft)',
-                }}
-                onClick={() => openFromNotification(n.serviceId, n.id)}
-              >
-                <ServiceIcon iconKey={n.icon} chip={28} />
-                <div className="grow">
-                  <div className="row-title">
-                    {n.important && (
-                      <FiStar
-                        size={12}
-                        fill="#FFB300"
-                        style={{ color: '#FFB300', marginRight: 5 }}
-                      />
-                    )}
-                    {n.title}
-                    <span
-                      className="muted"
-                      style={{ marginLeft: 8, fontWeight: 400 }}
-                    >
-                      {n.serviceName}
-                    </span>
-                  </div>
-                  {n.body && <div className="row-sub">{n.body}</div>}
-                </div>
-                <span className="muted" style={{ flexShrink: 0 }}>
-                  {timeAgo(n.receivedAt)}
-                </span>
-                <button
-                  className="icon-btn"
-                  title="削除"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    removeNotification(n.id);
-                  }}
-                >
-                  <FiTrash2 size={14} />
-                </button>
-              </div>
-            ))}
+          <div className="card" ref={listRef}>
+            {shown.map(row)}
           </div>
         )}
       </div>
 
-      <div className="section">
-        <h3 className="section-title">サービス別の未読</h3>
-        {services.length === 0 ? (
-          <div className="empty-state">
-            <FiPlus size={36} className="empty-icon" />
-            <h3>サービスがありません</h3>
-            <p>「サービスを追加」からサービスを追加してください。</p>
-            <button className="btn btn-primary" onClick={onOpenAdd}>
-              <FiPlus size={14} /> サービスを追加
-            </button>
-          </div>
-        ) : (
-          <div className="card">
-            {services.map((svc) => (
-              <div className="list-row" key={svc.id}>
-                <ServiceIcon iconKey={svc.icon} chip={28} />
-                <div className="grow">
-                  <div className="row-title">{svc.name}</div>
-                  <div className="row-sub">
-                    {serviceBadges[svc.id] > 0
-                      ? `未読 ${serviceBadges[svc.id]} 件`
-                      : '新着なし'}
-                  </div>
-                </div>
-                <button
-                  className="btn btn-sm btn-primary"
-                  onClick={() => openService(svc.id)}
-                >
-                  開く
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      {taskFor && (
+        <TaskQuickAdd
+          initialTitle={taskFor.taskSuggestion?.title ?? taskFor.title}
+          initialDue={taskFor.taskSuggestion?.due}
+          source={taskFor.summary ? 'ai' : 'notification'}
+          serviceId={taskFor.serviceId}
+          url={useAppStore.getState().serviceUrls[taskFor.serviceId]}
+          onClose={() => setTaskFor(null)}
+          onAdded={() => {
+            setNotificationMeta(taskFor.id, { taskSuggestion: undefined });
+            markNotificationDone(taskFor.id);
+          }}
+        />
+      )}
     </div>
   );
 }
