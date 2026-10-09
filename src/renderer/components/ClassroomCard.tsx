@@ -5,8 +5,11 @@ import {
   FiExternalLink,
   FiChevronDown,
   FiChevronRight,
+  FiCheckSquare,
 } from 'react-icons/fi';
-import { useAppStore } from '../store/useAppStore';
+import { useAppStore, useProfileServices } from '../store/useAppStore';
+import { partitionFor } from '../lib/session';
+import { extractDue } from '../lib/priority';
 
 type Item = { title: string; href: string; due: string; course: string };
 type State =
@@ -75,7 +78,10 @@ export function ClassroomCard() {
     () => new Set(BUCKET_ORDER.filter((b) => !DEFAULT_OPEN.includes(b)))
   );
 
-  const services = useAppStore((s) => s.services);
+  const services = useProfileServices();
+  const activeProfileId = useAppStore((s) => s.activeProfileId);
+  const tasks = useAppStore((s) => s.tasks);
+  const addTask = useAppStore((s) => s.addTask);
   const navigateService = useAppStore((s) => s.navigateService);
   const setClassroomItems = useAppStore((s) => s.setClassroomItems);
   const addNotification = useAppStore((s) => s.addNotification);
@@ -105,7 +111,9 @@ export function ClassroomCard() {
   const load = useCallback(async () => {
     setRefreshing(true);
     try {
-      const r = await window.workOne.scrapeClassroom();
+      const r = await window.workOne.scrapeClassroom(
+        partitionFor(useAppStore.getState().activeProfileId)
+      );
       if (r.loginRequired) setState({ kind: 'login' });
       else if (r.unavailable) setState({ kind: 'unavailable' });
       else {
@@ -137,7 +145,7 @@ export function ClassroomCard() {
     } finally {
       setRefreshing(false);
     }
-  }, [addNotification, classroomService, classroomServiceId, setClassroomItems]);
+  }, [addNotification, classroomService, classroomServiceId, setClassroomItems, activeProfileId]);
 
   useEffect(() => {
     load();
@@ -285,6 +293,28 @@ export function ClassroomCard() {
                           {a.due ? `　${a.due}` : ''}
                         </div>
                       </div>
+                      {tasks.some((t) => t.url === a.href) ? (
+                        <span className="muted" style={{ fontSize: 12, flexShrink: 0 }}>
+                          タスク登録済み
+                        </span>
+                      ) : (
+                        <button
+                          className="btn btn-sm btn-ghost"
+                          title="タスクに追加"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            addTask({
+                              title: `${a.title}（${a.course}）`,
+                              due: extractDue(a.due),
+                              source: 'classroom',
+                              serviceId: classroomServiceId,
+                              url: a.href,
+                            });
+                          }}
+                        >
+                          <FiCheckSquare size={13} /> タスク化
+                        </button>
+                      )}
                       {!classroomServiceId && (
                         <FiExternalLink
                           size={13}

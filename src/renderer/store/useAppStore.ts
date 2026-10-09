@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type {
@@ -8,13 +9,17 @@ import type {
   RecentEntry,
   AppNotification,
   HistoryEntry,
+  Profile,
+  Task,
 } from '../types/service';
+import { DEFAULT_PROFILE_ID } from '../types/service';
 import { CATEGORY_DEFAULT_ICON } from '../data/iconMap';
 
 // 画面（サイドバーの遷移先）
 export type ViewKey =
   | 'today'
   | 'inbox'
+  | 'tasks'
   | 'readLater'
   | 'focus'
   | 'settings'
@@ -30,9 +35,41 @@ type CustomServiceInput = {
   icon: string;
 };
 
+export const DEFAULT_PROFILE: Profile = {
+  id: DEFAULT_PROFILE_ID,
+  name: '個人',
+  emoji: '🏠',
+  color: '#5b8def',
+  schedule: [],
+};
+
+export const PROFILE_COLORS = [
+  '#5b8def',
+  '#e5484d',
+  '#30a46c',
+  '#f76b15',
+  '#8e4ec6',
+  '#d6409f',
+  '#12a594',
+  '#ad7f58',
+];
+
+const NOTIFICATION_LIMIT = 1000;
+
 type AppState = {
   // 永続化対象
   services: Service[];
+  /** プロファイル（Arc の Space 相当） */
+  profiles: Profile[];
+  activeProfileId: string;
+  /** 時間割による自動切り替え */
+  profileAutoSwitch: boolean;
+  /** タスク */
+  tasks: Task[];
+  /** オンデバイス AI（Apple Foundation Models）を使う */
+  aiEnabled: boolean;
+  /** 使っていないサービスを休止させるまでの分数（0 で無効） */
+  hibernateMinutes: number;
   readLater: ReadLaterItem[];
   recent: RecentEntry[];
   focusMode: FocusMode;
@@ -116,8 +153,41 @@ type AppState = {
   activeServiceId: string | null;
   /** サービスごとの未読数（ページタイトルから推定、永続化しない） */
   serviceBadges: Record<string, number>;
-  /** 統合 Inbox の通知（メモリのみ、永続化しない） */
+  /** 統合 Inbox の通知（端末内にのみ保存） */
   notifications: AppNotification[];
+
+  // --- プロファイル ---
+  addProfile: (input: Omit<Profile, 'id' | 'schedule'>) => string;
+  updateProfile: (id: string, patch: Partial<Omit<Profile, 'id'>>) => void;
+  /** プロファイルとそのサービス・タスクを削除（既定プロファイルは削除不可） */
+  removeProfile: (id: string) => void;
+  setActiveProfile: (id: string) => void;
+  moveServiceToProfile: (serviceId: string, profileId: string) => void;
+  setProfileAutoSwitch: (enabled: boolean) => void;
+
+  // --- タスク ---
+  addTask: (input: Omit<Task, 'id' | 'createdAt' | 'done' | 'profileId'> & {
+    profileId?: string;
+  }) => string;
+  updateTask: (id: string, patch: Partial<Omit<Task, 'id'>>) => void;
+  toggleTaskDone: (id: string) => void;
+  removeTask: (id: string) => void;
+  clearDoneTasks: () => void;
+
+  // --- Inbox トリアージ ---
+  markNotificationDone: (id: string) => void;
+  snoozeNotification: (id: string, until: string) => void;
+  /** スヌーズ期限が過ぎた通知を戻す */
+  wakeSnoozed: () => void;
+  setNotificationMeta: (
+    id: string,
+    meta: Partial<
+      Pick<AppNotification, 'score' | 'summary' | 'taskSuggestion' | 'analyzed'>
+    >
+  ) => void;
+  setAiEnabled: (enabled: boolean) => void;
+  setServiceKeepAlive: (id: string, keepAlive: boolean) => void;
+  setHibernateMinutes: (min: number) => void;
 
   // --- ナビゲーション ---
   setView: (view: ViewKey) => void;
@@ -231,6 +301,12 @@ export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
       services: [],
+      profiles: [DEFAULT_PROFILE],
+      activeProfileId: DEFAULT_PROFILE_ID,
+      profileAutoSwitch: false,
+      tasks: [],
+      aiEnabled: true,
+      hibernateMinutes: 30,
       readLater: [],
       recent: [],
       focusMode: 'normal',
@@ -277,6 +353,132 @@ export const useAppStore = create<AppState>()(
       notifications: [],
 
       setView: (view) => set({ activeView: view }),
+
+      addProfile: (input) => {
+        const id = uid();
+        set({ profiles: [...get().profiles, { ...input, id, schedule: [] }] });
+        return id;
+      },
+      updateProfile: (id, patch) =>
+        set({
+          profiles: get().profiles.map((p) =>
+            p.id === id ? { ...p, ...patch } : p
+          ),
+        }),
+      removeProfile: (id) => {
+        if (id === DEFAULT_PROFILE_ID) return;
+        const removedIds = new Set(
+          get()
+            .services.filter((s) => s.profileId === id)
+            .map((s) => s.id)
+        );
+        const active = get().activeProfileId === id;
+        set({
+          profiles: get().profiles.filter((p) => p.id !== id),
+          services: get().services.filter((s) => !removedIds.has(s.id)),
+          tasks: get().tasks.filter((t) => t.profileId !== id),
+          notifications: get().notifications.filter(
+            (n) => !removedIds.has(n.serviceId)
+          ),
+          activeProfileId: active ? DEFAULT_PROFILE_ID : get().activeProfileId,
+          ...(active || removedIds.has(get().activeServiceId ?? '')
+            ? { activeView: 'today' as ViewKey, activeServiceId: null }
+            : {}),
+        });
+      },
+      setActiveProfile: (id) => {
+        if (!get().profiles.some((p) => p.id === id)) return;
+        if (get().activeProfileId === id) return;
+        // 表示中サービスが別プロファイルのものなら Home に戻す
+        const cur = get().services.find((s) => s.id === get().activeServiceId);
+        const leaving =
+          cur && (cur.profileId ?? DEFAULT_PROFILE_ID) !== id;
+        set({
+          activeProfileId: id,
+          ...(leaving ? { activeView: 'today' as ViewKey, activeServiceId: null } : {}),
+        });
+      },
+      moveServiceToProfile: (serviceId, profileId) =>
+        set({
+          services: get().services.map((s) =>
+            s.id === serviceId ? { ...s, profileId } : s
+          ),
+        }),
+      setProfileAutoSwitch: (enabled) => set({ profileAutoSwitch: enabled }),
+
+      addTask: (input) => {
+        const id = uid();
+        const task: Task = {
+          ...input,
+          id,
+          title: input.title.trim(),
+          profileId: input.profileId ?? get().activeProfileId,
+          done: false,
+          createdAt: new Date().toISOString(),
+        };
+        set({ tasks: [task, ...get().tasks] });
+        return id;
+      },
+      updateTask: (id, patch) =>
+        set({
+          tasks: get().tasks.map((t) => (t.id === id ? { ...t, ...patch } : t)),
+        }),
+      toggleTaskDone: (id) =>
+        set({
+          tasks: get().tasks.map((t) =>
+            t.id === id
+              ? {
+                  ...t,
+                  done: !t.done,
+                  doneAt: !t.done ? new Date().toISOString() : undefined,
+                }
+              : t
+          ),
+        }),
+      removeTask: (id) => set({ tasks: get().tasks.filter((t) => t.id !== id) }),
+      clearDoneTasks: () => set({ tasks: get().tasks.filter((t) => !t.done) }),
+
+      markNotificationDone: (id) =>
+        set({
+          notifications: get().notifications.map((n) =>
+            n.id === id ? { ...n, done: true, read: true } : n
+          ),
+        }),
+      snoozeNotification: (id, until) =>
+        set({
+          notifications: get().notifications.map((n) =>
+            n.id === id ? { ...n, snoozedUntil: until, read: true } : n
+          ),
+        }),
+      wakeSnoozed: () => {
+        const now = Date.now();
+        const due = get().notifications.some(
+          (n) => n.snoozedUntil && new Date(n.snoozedUntil).getTime() <= now
+        );
+        if (!due) return;
+        set({
+          notifications: get().notifications.map((n) =>
+            n.snoozedUntil && new Date(n.snoozedUntil).getTime() <= now
+              ? { ...n, snoozedUntil: undefined, read: false }
+              : n
+          ),
+        });
+      },
+      setNotificationMeta: (id, meta) =>
+        set({
+          notifications: get().notifications.map((n) =>
+            n.id === id ? { ...n, ...meta } : n
+          ),
+        }),
+      setAiEnabled: (enabled) => set({ aiEnabled: enabled }),
+      setServiceKeepAlive: (id, keepAlive) =>
+        set({
+          services: get().services.map((s) =>
+            s.id === id ? { ...s, keepAlive } : s
+          ),
+        }),
+      setHibernateMinutes: (min) =>
+        set({ hibernateMinutes: Math.max(0, Math.round(min)) }),
 
       setNotificationsEnabled: (enabled) =>
         set({ notificationsEnabled: enabled }),
@@ -342,6 +544,8 @@ export const useAppStore = create<AppState>()(
           exportedAt: new Date().toISOString(),
           settings: {
             services: s.services,
+            profiles: s.profiles,
+            tasks: s.tasks,
             readLater: s.readLater,
             focusMode: s.focusMode,
             focusServiceIds: s.focusServiceIds,
@@ -377,6 +581,8 @@ export const useAppStore = create<AppState>()(
           // 既知のキーだけを取り込む（未知キーは無視）
           const allowed: (keyof AppState)[] = [
             'services',
+            'profiles',
+            'tasks',
             'readLater',
             'focusMode',
             'focusServiceIds',
@@ -457,7 +663,7 @@ export const useAppStore = create<AppState>()(
           ...item,
         };
         set({
-          notifications: [entry, ...get().notifications].slice(0, 100),
+          notifications: [entry, ...get().notifications].slice(0, NOTIFICATION_LIMIT),
         });
       },
       markNotificationRead: (id) =>
@@ -535,6 +741,7 @@ export const useAppStore = create<AppState>()(
           supportLevel: template.supportLevel,
           isCustom: false,
           createdAt: new Date().toISOString(),
+          profileId: get().activeProfileId,
         };
         set({ services: [...get().services, service] });
       },
@@ -553,6 +760,7 @@ export const useAppStore = create<AppState>()(
           },
           isCustom: true,
           createdAt: new Date().toISOString(),
+          profileId: get().activeProfileId,
         };
         set({ services: [...get().services, service] });
       },
@@ -620,7 +828,11 @@ export const useAppStore = create<AppState>()(
 
       isTemplateAdded: (template) => {
         const key = `${template.name}::${template.url}`;
-        return get().services.some((s) => templateKeyOf(s) === key);
+        const pid = get().activeProfileId;
+        return get().services.some(
+          (s) =>
+            templateKeyOf(s) === key && (s.profileId ?? DEFAULT_PROFILE_ID) === pid
+        );
       },
 
       setFocusMode: (mode) => set({ focusMode: mode }),
@@ -672,6 +884,9 @@ export const useAppStore = create<AppState>()(
           readLater: [],
           recent: [],
           notifications: [],
+          tasks: [],
+          profiles: [DEFAULT_PROFILE],
+          activeProfileId: DEFAULT_PROFILE_ID,
           history: [],
           serviceBadges: {},
           mutedServices: [],
@@ -686,8 +901,28 @@ export const useAppStore = create<AppState>()(
     {
       name: 'workone-store',
       // 永続化するキーだけを選ぶ（UI ナビゲーション状態は除外）
+      version: 2,
+      // v1 → v2: 既存サービスは既定プロファイルへ。通知は以前は保存していなかった。
+      migrate: (persisted: any, version) => {
+        if (persisted && version < 2) {
+          persisted.services = (persisted.services ?? []).map((s: Service) => ({
+            ...s,
+            profileId: s.profileId ?? DEFAULT_PROFILE_ID,
+          }));
+          persisted.profiles = [DEFAULT_PROFILE];
+          persisted.activeProfileId = DEFAULT_PROFILE_ID;
+        }
+        return persisted;
+      },
       partialize: (state) => ({
         services: state.services,
+        profiles: state.profiles,
+        activeProfileId: state.activeProfileId,
+        profileAutoSwitch: state.profileAutoSwitch,
+        tasks: state.tasks,
+        aiEnabled: state.aiEnabled,
+        hibernateMinutes: state.hibernateMinutes,
+        notifications: state.notifications,
         readLater: state.readLater,
         recent: state.recent,
         focusMode: state.focusMode,
@@ -727,3 +962,22 @@ export const useAppStore = create<AppState>()(
     }
   )
 );
+
+/** サービスの所属プロファイル ID */
+export const profileOf = (s: Service) => s.profileId ?? DEFAULT_PROFILE_ID;
+
+/** 現在のプロファイルに属するサービスだけを返すフック */
+export function useProfileServices(): Service[] {
+  const services = useAppStore((s) => s.services);
+  const pid = useAppStore((s) => s.activeProfileId);
+  return useMemo(
+    () => services.filter((s) => profileOf(s) === pid),
+    [services, pid]
+  );
+}
+
+export function useActiveProfile(): Profile {
+  return useAppStore(
+    (s) => s.profiles.find((p) => p.id === s.activeProfileId) ?? DEFAULT_PROFILE
+  );
+}

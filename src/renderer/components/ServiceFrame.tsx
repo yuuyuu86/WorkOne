@@ -13,7 +13,7 @@ import { MdPictureInPictureAlt } from 'react-icons/md';
 import { useAppStore } from '../store/useAppStore';
 import { ServiceIcon } from './ServiceIcon';
 import { CHROME_USER_AGENT } from '../data/userAgent';
-import { SHARED_PARTITION } from '../lib/session';
+import { partitionFor } from '../lib/session';
 import { parseUnreadCount, hostnameOf } from '../lib/unread';
 import { isLoginUrl } from '../lib/login';
 import { playNotificationSound } from '../lib/sound';
@@ -768,7 +768,7 @@ export function ServiceFrame({ service, isActive }: Props) {
         <webview
           ref={webviewRef}
           src={initialSrc}
-          partition={SHARED_PARTITION}
+          partition={partitionFor(service.profileId)}
           useragent={CHROME_USER_AGENT}
           // Calendar だけ、裏でも描画を止めない（時刻つき予定の読み取りに必要）。
           // 他サービスまで常時フル稼働にするとメモリ/CPU負荷が増え、レンダラーが

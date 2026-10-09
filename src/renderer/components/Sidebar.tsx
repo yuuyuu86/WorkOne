@@ -12,8 +12,14 @@ import {
   FiChevronDown,
   FiChevronRight,
   FiHelpCircle,
+  FiCheckSquare,
 } from 'react-icons/fi';
-import { useAppStore, type ViewKey } from '../store/useAppStore';
+import {
+  useAppStore,
+  useProfileServices,
+  type ViewKey,
+} from '../store/useAppStore';
+import { ProfileSwitcher } from './ProfileSwitcher';
 import {
   CATEGORY_LABELS,
   CATEGORY_ORDER,
@@ -40,7 +46,12 @@ export function Sidebar({
   const setSidebarWidth = useAppStore((s) => s.setSidebarWidth);
   const activeView = useAppStore((s) => s.activeView);
   const activeServiceId = useAppStore((s) => s.activeServiceId);
-  const services = useAppStore((s) => s.services);
+  const allServices = useAppStore((s) => s.services);
+  const services = useProfileServices();
+  const tasksOpen = useAppStore(
+    (s) =>
+      s.tasks.filter((t) => !t.done && t.profileId === s.activeProfileId).length
+  );
   const focusMode = useAppStore((s) => s.focusMode);
   const focusServiceIds = useAppStore((s) => s.focusServiceIds);
   const readLater = useAppStore((s) => s.readLater);
@@ -52,7 +63,7 @@ export function Sidebar({
   const collapsedCategories = useAppStore((s) => s.collapsedCategories);
   const toggleCategoryCollapsed = useAppStore((s) => s.toggleCategoryCollapsed);
   const unreadNotifications = useAppStore(
-    (s) => s.notifications.filter((n) => !n.read).length
+    (s) => s.notifications.filter((n) => !n.read && !n.done && !n.snoozedUntil).length
   );
 
   // ドラッグ並び替え（通常モードのみ。集中モードは表示が絞られるため無効）。
@@ -125,8 +136,8 @@ export function Sidebar({
     }
     const dragged = services.find((s) => s.id === dragId);
     if (dragged && (!sidebarGrouped || dragged.category === target.category)) {
-      const from = services.findIndex((s) => s.id === dragId);
-      const to = services.findIndex((s) => s.id === target.id);
+      const from = allServices.findIndex((s) => s.id === dragId);
+      const to = allServices.findIndex((s) => s.id === target.id);
       if (from >= 0 && to >= 0) reorderServices(from, to);
     }
     setDragId(null);
@@ -312,6 +323,12 @@ export function Sidebar({
           unreadNotifications ? String(unreadNotifications) : undefined
         )}
         {navItem(
+          'tasks',
+          'タスク',
+          <FiCheckSquare size={16} />,
+          tasksOpen ? String(tasksOpen) : undefined
+        )}
+        {navItem(
           'readLater',
           'あとで見る',
           <FiBookmark size={16} />,
@@ -376,6 +393,8 @@ export function Sidebar({
         <span className="nav-label">ショートカット</span>
         <span className="nav-badge">?</span>
       </button>
+
+      <ProfileSwitcher />
 
       <div
         className={`sidebar-resizer ${resizing ? 'active' : ''}`}

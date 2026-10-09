@@ -13,7 +13,7 @@ import { useAppStore } from '../store/useAppStore';
 import { CATEGORY_LABELS, type Service } from '../types/service';
 import { ServiceIcon } from './ServiceIcon';
 import { confirmAction } from '../lib/confirm';
-import { SHARED_PARTITION } from '../lib/session';
+import { partitionFor } from '../lib/session';
 import { CustomServiceForm } from './CustomServiceForm';
 import { geocodeCity, getPreciseLocation, detectLocation } from '../lib/weather';
 import { fileToResizedDataUrl } from '../lib/image';
@@ -170,7 +170,9 @@ export function SettingsView() {
       'すべてのサービスのキャッシュとログインセッションを削除しますか？各サービスからログアウトされ、次回開いたときに再ログインが必要になります。'
     );
     if (!ok) return;
-    const partitions = [SHARED_PARTITION];
+    const partitions = useAppStore
+      .getState()
+      .profiles.map((p) => partitionFor(p.id));
     const api = (window as any).workOne;
     if (api?.clearWebCache) {
       await api.clearWebCache(partitions);

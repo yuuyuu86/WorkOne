@@ -21,7 +21,11 @@ import {
   FiRotateCcw,
   FiImage,
 } from 'react-icons/fi';
-import { useAppStore, DEFAULT_HOME_WIDGETS } from '../store/useAppStore';
+import {
+  useAppStore,
+  useProfileServices,
+  DEFAULT_HOME_WIDGETS,
+} from '../store/useAppStore';
 import { fileToResizedDataUrl } from '../lib/image';
 import { ServiceIcon } from './ServiceIcon';
 import { WeatherIcon } from './WeatherIcon';
@@ -103,7 +107,7 @@ type Props = {
 };
 
 export function TodayView({ onOpenAdd }: Props) {
-  const services = useAppStore((s) => s.services);
+  const services = useProfileServices();
   const recent = useAppStore((s) => s.recent);
   const readLater = useAppStore((s) => s.readLater);
   const notifications = useAppStore((s) => s.notifications);

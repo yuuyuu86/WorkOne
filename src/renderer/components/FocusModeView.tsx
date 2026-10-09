@@ -1,6 +1,6 @@
 import type { IconType } from 'react-icons';
 import { FiGrid, FiTarget, FiMoon } from 'react-icons/fi';
-import { useAppStore } from '../store/useAppStore';
+import { useAppStore, useProfileServices } from '../store/useAppStore';
 import type { FocusMode } from '../types/service';
 import { ServiceIcon } from './ServiceIcon';
 
@@ -33,7 +33,7 @@ const MODES: {
 export function FocusModeView() {
   const focusMode = useAppStore((s) => s.focusMode);
   const setFocusMode = useAppStore((s) => s.setFocusMode);
-  const services = useAppStore((s) => s.services);
+  const services = useProfileServices();
   const focusServiceIds = useAppStore((s) => s.focusServiceIds);
   const toggleFocusService = useAppStore((s) => s.toggleFocusService);
 

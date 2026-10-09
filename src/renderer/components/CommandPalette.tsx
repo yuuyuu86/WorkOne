@@ -5,8 +5,9 @@ import {
   FiCornerDownLeft,
   FiBookOpen,
   FiCalendar,
+  FiCheckSquare,
 } from 'react-icons/fi';
-import { useAppStore } from '../store/useAppStore';
+import { useAppStore, useProfileServices } from '../store/useAppStore';
 import { ServiceIcon } from './ServiceIcon';
 import { getServiceSearchUrl } from '../lib/search';
 
@@ -18,14 +19,22 @@ type Item =
   | { kind: 'history'; id: string; serviceId: string; serviceName: string; icon: string; title: string; url: string }
   | { kind: 'search'; id: string; serviceId: string; serviceName: string; icon: string; url: string }
   | { kind: 'classroom'; id: string; serviceId: string; serviceName: string; icon: string; title: string; sub: string; url: string }
-  | { kind: 'calendar'; id: string; serviceId: string; serviceName: string; icon: string; title: string; url: string };
+  | { kind: 'calendar'; id: string; serviceId: string; serviceName: string; icon: string; title: string; url: string }
+  | { kind: 'addTask'; id: string; title: string }
+  | { kind: 'task'; id: string; title: string; sub: string }
+  | { kind: 'profile'; id: string; profileId: string; title: string; emoji: string };
 
 export function CommandPalette({ onClose }: Props) {
   const history = useAppStore((s) => s.history);
-  const services = useAppStore((s) => s.services);
+  const services = useProfileServices();
   const navigateService = useAppStore((s) => s.navigateService);
   const classroomItems = useAppStore((s) => s.classroomItems);
   const calendarRaw = useAppStore((s) => s.calendarRaw);
+  const tasks = useAppStore((s) => s.tasks);
+  const profiles = useAppStore((s) => s.profiles);
+  const addTask = useAppStore((s) => s.addTask);
+  const setView = useAppStore((s) => s.setView);
+  const setActiveProfile = useAppStore((s) => s.setActiveProfile);
 
   const classroomService = services.find((s) => {
     try {
@@ -130,14 +139,73 @@ export function CommandPalette({ onClose }: Props) {
           }))
       : [];
 
-    return [...histItems, ...classroomMatches, ...calendarMatches, ...searchItems];
-  }, [query, history, services, classroomItems, calendarRaw, classroomService, calendarService]);
+    // タスク: 「+ タスクを追加」と、一致する未完了タスク
+    const taskItems: Item[] = q
+      ? [
+          { kind: 'addTask', id: 'add-task', title: query.trim().replace(/^[+＋]\s*/, '') } as Item,
+          ...tasks
+            .filter((t) => !t.done && t.title.toLowerCase().includes(q))
+            .slice(0, 5)
+            .map(
+              (t) =>
+                ({
+                  kind: 'task',
+                  id: `task-${t.id}`,
+                  title: t.title,
+                  sub: t.due ? `期限 ${t.due.slice(0, 10)}` : '期限なし',
+                }) as Item
+            ),
+        ]
+      : [];
+
+    // プロファイル切り替え
+    const profileItems: Item[] = q
+      ? profiles
+          .filter((p) => p.name.toLowerCase().includes(q))
+          .map((p) => ({
+            kind: 'profile',
+            id: `profile-${p.id}`,
+            profileId: p.id,
+            title: p.name,
+            emoji: p.emoji,
+          }))
+      : [];
+
+    // 「+」で始まる入力はタスク追加を先頭に
+    const taskFirst = /^[+＋]/.test(query.trim());
+    return taskFirst
+      ? [...taskItems, ...profileItems, ...histItems]
+      : [
+          ...profileItems,
+          ...histItems,
+          ...classroomMatches,
+          ...calendarMatches,
+          ...searchItems,
+          ...taskItems,
+        ];
+  }, [query, history, services, classroomItems, calendarRaw, classroomService, calendarService, tasks, profiles]);
 
   useEffect(() => {
     setActive(0);
   }, [query]);
 
   const choose = (item: Item) => {
+    if (item.kind === 'addTask') {
+      if (item.title) addTask({ title: item.title, source: 'manual' });
+      setView('tasks');
+      onClose();
+      return;
+    }
+    if (item.kind === 'task') {
+      setView('tasks');
+      onClose();
+      return;
+    }
+    if (item.kind === 'profile') {
+      setActiveProfile(item.profileId);
+      onClose();
+      return;
+    }
     if (!item.serviceId || !item.url) {
       onClose();
       return;
@@ -172,7 +240,7 @@ export function CommandPalette({ onClose }: Props) {
           <input
             ref={inputRef}
             value={query}
-            placeholder="キーワードで検索（履歴・課題・予定…）"
+            placeholder="検索（履歴・課題・予定・タスク）／ + でタスク追加"
             onChange={(e) => setQuery(e.target.value)}
           />
           <kbd className="cp-kbd">Esc</kbd>
@@ -193,8 +261,29 @@ export function CommandPalette({ onClose }: Props) {
                 onMouseEnter={() => setActive(i)}
                 onClick={() => choose(item)}
               >
-                <ServiceIcon iconKey={item.icon} chip={24} />
-                {item.kind === 'history' ? (
+                {item.kind === 'addTask' || item.kind === 'task' ? (
+                  <FiCheckSquare size={20} style={{ color: 'var(--accent)', margin: '0 2px' }} />
+                ) : item.kind === 'profile' ? (
+                  <span style={{ fontSize: 18, width: 24, textAlign: 'center' }}>{item.emoji}</span>
+                ) : (
+                  <ServiceIcon iconKey={item.icon} chip={24} />
+                )}
+                {item.kind === 'addTask' ? (
+                  <div className="cp-item-body">
+                    <div className="cp-item-title">タスクを追加:「{item.title}」</div>
+                    <div className="cp-item-sub">先頭に + を付けるとすぐ追加できます</div>
+                  </div>
+                ) : item.kind === 'task' ? (
+                  <div className="cp-item-body">
+                    <div className="cp-item-title">{item.title}</div>
+                    <div className="cp-item-sub">タスク・{item.sub}</div>
+                  </div>
+                ) : item.kind === 'profile' ? (
+                  <div className="cp-item-body">
+                    <div className="cp-item-title">{item.title} に切り替え</div>
+                    <div className="cp-item-sub">プロファイル</div>
+                  </div>
+                ) : item.kind === 'history' ? (
                   <div className="cp-item-body">
                     <div className="cp-item-title">{item.title}</div>
                     <div className="cp-item-sub">

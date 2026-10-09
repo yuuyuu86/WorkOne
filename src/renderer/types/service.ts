@@ -22,7 +22,33 @@ export type Service = {
   supportLevel: ServiceSupportLevel;
   isCustom: boolean;
   createdAt: string;
+  /** 所属プロファイル（未指定は既定プロファイル） */
+  profileId?: string;
+  /** 使っていないときも休止させない（通知を受け続けたいサービス用） */
+  keepAlive?: boolean;
 };
+
+/** 時間割（この曜日・時間帯はこのプロファイルに自動で切り替える） */
+export type ProfileSchedule = {
+  /** 0=日 〜 6=土 */
+  days: number[];
+  start: string; // "HH:MM"
+  end: string; // "HH:MM"
+};
+
+/**
+ * Arc の Space のようなプロファイル。ログイン状態（パーティション）・
+ * サービス一覧・テーマ色をプロファイルごとに分ける。
+ */
+export type Profile = {
+  id: string;
+  name: string;
+  emoji: string;
+  color: string;
+  schedule: ProfileSchedule[];
+};
+
+export const DEFAULT_PROFILE_ID = 'default';
 
 /** サービス追加画面で使うテンプレート（id は追加時に採番） */
 export type ServiceTemplate = Omit<Service, 'id' | 'createdAt' | 'isCustom'> & {
@@ -44,7 +70,7 @@ export type ReadLaterItem = {
  * 統合 Inbox に集約する通知アイテム。
  * 各サービスの Web 通知（Gmail/Slack/Calendar 等が出すもの）や、
  * Gmail フィードの新着を正規化して 1 か所にまとめる。
- * プライバシー配慮のため localStorage には保存せず、メモリ上のみで保持する。
+ * 端末内（localStorage）にのみ保存し、外部へは送信しない（AI もオンデバイス）。
  */
 export type AppNotification = {
   id: string;
@@ -57,6 +83,37 @@ export type AppNotification = {
   read: boolean;
   /** 重要サービス由来の通知（重要グループでフィルタ・集中モードでも通知） */
   important: boolean;
+  /** トリアージで完了にした */
+  done?: boolean;
+  /** この時刻まで非表示（スヌーズ） */
+  snoozedUntil?: string;
+  /** 重要度スコア（0〜100、ルール＋オンデバイス AI） */
+  score?: number;
+  /** AI による一行要約 */
+  summary?: string;
+  /** タスク候補（ルール or AI が抽出。ユーザーが確認して登録する） */
+  taskSuggestion?: { title: string; due?: string };
+  /** スコア付け・AI 処理済み */
+  analyzed?: boolean;
+};
+
+/** タスク */
+export type TaskSource = 'manual' | 'notification' | 'classroom' | 'ai';
+
+export type Task = {
+  id: string;
+  title: string;
+  /** 期限（YYYY-MM-DD または ISO）。無ければ undefined */
+  due?: string;
+  note?: string;
+  source: TaskSource;
+  /** 出どころのサービス／リンク（クリックで開く） */
+  serviceId?: string;
+  url?: string;
+  profileId: string;
+  done: boolean;
+  doneAt?: string;
+  createdAt: string;
 };
 
 /** 集中モードの種類 */
