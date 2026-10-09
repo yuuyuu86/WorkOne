@@ -226,7 +226,9 @@ app.on('web-contents-created', (_event, contents) => {
   // すべての webContents（webview / 子ウィンドウ）で、外部アプリを起動する
   // カスタムスキーム（slack:// / zoommtg:// / msteams:// など）への遷移を阻止する。
   // これがないと「ブラウザで使う」つもりでもデスクトップアプリが起動してしまう。
-  const blockExternalScheme = (e: Electron.Event, url: string) => {
+  // Electron 25 以降は URL を event.url で受け取る（第2引数は非推奨）
+  const blockExternalScheme = (e: Electron.Event, legacyUrl?: string) => {
+    const url = (e as unknown as { url?: string }).url ?? legacyUrl ?? '';
     if (!isWebUrl(url)) {
       e.preventDefault();
     }

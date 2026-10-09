@@ -353,7 +353,6 @@ export function ServiceFrame({ service, isActive }: Props) {
     wv.addEventListener('console-message', onConsole);
     wv.addEventListener('did-start-loading', onStartLoading);
     wv.addEventListener('did-fail-load', onFailLoad);
-    wv.addEventListener('crashed', onCrashed);
     wv.addEventListener('render-process-gone', onCrashed);
     return () => {
       wv.removeEventListener('did-navigate', onNavigate);
@@ -363,7 +362,6 @@ export function ServiceFrame({ service, isActive }: Props) {
       wv.removeEventListener('console-message', onConsole);
       wv.removeEventListener('did-start-loading', onStartLoading);
       wv.removeEventListener('did-fail-load', onFailLoad);
-      wv.removeEventListener('crashed', onCrashed);
       wv.removeEventListener('render-process-gone', onCrashed);
     };
   }, [
