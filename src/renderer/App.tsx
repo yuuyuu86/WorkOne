@@ -4,8 +4,6 @@ import { ServiceWebviews } from './components/ServiceWebviews';
 import { TodayView } from './components/TodayView';
 import { InboxView } from './components/InboxView';
 import { TasksView } from './components/TasksView';
-import { ReadLaterView } from './components/ReadLaterView';
-import { FocusModeView } from './components/FocusModeView';
 import { SettingsView } from './components/SettingsView';
 import { AddServiceModal } from './components/AddServiceModal';
 import { CommandPalette } from './components/CommandPalette';
@@ -128,6 +126,28 @@ export default function App() {
     return () => clearInterval(t);
   }, [profileAutoSwitch]);
 
+  // メニューバーのミニ版で変更したタスクなどを反映し、ミニ版からの「画面を開く」に応える
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'workone-store') useAppStore.persist.rehydrate();
+    };
+    window.addEventListener('storage', onStorage);
+    const off = window.workOne?.onTrayNavigate?.(({ view, serviceId }) => {
+      const st = useAppStore.getState();
+      if (serviceId && st.services.some((s) => s.id === serviceId)) {
+        const svc = st.services.find((s) => s.id === serviceId)!;
+        st.setActiveProfile(profileOf(svc));
+        st.openService(serviceId);
+      } else if (view === 'inbox' || view === 'tasks' || view === 'today') {
+        st.setView(view);
+      }
+    });
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      off?.();
+    };
+  }, []);
+
   // 新着通知の重要度スコア・AI 要約・タスク候補の抽出
   useInboxAi();
   // 時刻つきタスクのリマインダー
@@ -159,9 +179,6 @@ export default function App() {
           break;
         case 'view-inbox':
           store.setView('inbox');
-          break;
-        case 'view-readlater':
-          store.setView('readLater');
           break;
         case 'view-tasks':
           store.setView('tasks');
@@ -221,10 +238,6 @@ export default function App() {
         return <InboxView onOpenAdd={() => setShowAdd(true)} />;
       case 'tasks':
         return <TasksView />;
-      case 'readLater':
-        return <ReadLaterView />;
-      case 'focus':
-        return <FocusModeView />;
       case 'settings':
         return <SettingsView />;
       default:

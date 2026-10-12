@@ -1506,29 +1506,6 @@ textarea {
   min-width: 160px;
 }
 
-/* ---------- フィルタチップ ---------- */
-.filter-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 12px;
-}
-
-.filter-chips .chip {
-  border: 1px solid var(--border-strong);
-  background: var(--panel-bg);
-  color: var(--text-secondary);
-  padding: 4px 12px;
-  border-radius: 999px;
-  font-size: 12.5px;
-}
-
-.filter-chips .chip.active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-}
-
 /* ---------- コマンドパレット（検索 Cmd+K） ---------- */
 .command-palette {
   position: fixed;
@@ -1619,31 +1596,6 @@ textarea {
   font-size: 11.5px;
   color: var(--text-tertiary);
   margin-top: 2px;
-}
-
-/* ---------- 集中モード セグメント ---------- */
-.segmented {
-  display: inline-flex;
-  background: var(--hover);
-  border-radius: 10px;
-  padding: 3px;
-  gap: 3px;
-}
-
-.segmented button {
-  border: none;
-  background: transparent;
-  padding: 7px 16px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-secondary);
-}
-
-.segmented button.active {
-  background: var(--panel-bg);
-  color: var(--text);
-  box-shadow: var(--shadow);
 }
 
 /* ---------- チェック行 ---------- */
@@ -1751,91 +1703,6 @@ textarea {
 .weather-card .weather-meta {
   font-size: 11.5px;
   color: var(--text-secondary);
-}
-
-.stat-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 12px;
-  margin-bottom: 32px;
-}
-
-.stat-tile {
-  background: var(--panel-bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  padding: 14px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.stat-tile .stat-head {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  color: var(--text-secondary);
-  font-size: 12.5px;
-}
-
-.stat-tile .stat-value {
-  font-size: 26px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-
-.stat-tile.accent .stat-value {
-  color: var(--accent);
-}
-
-.stat-tile.danger .stat-value {
-  color: var(--danger);
-}
-
-.shortcut-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 10px;
-}
-
-.shortcut-tile {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--panel-bg);
-  text-align: left;
-  transition: background 0.12s ease;
-}
-
-.shortcut-tile:hover {
-  background: var(--hover);
-}
-
-.shortcut-tile .tile-name {
-  font-weight: 600;
-  font-size: 13.5px;
-}
-
-.status-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 12px;
-  border-radius: 999px;
-  background: var(--hover);
-  font-size: 12.5px;
-  font-weight: 500;
-  color: var(--text-secondary);
-}
-
-.status-pill.active-mode {
-  background: var(--accent-soft);
-  color: var(--accent);
 }
 
 .reorder-btns {
@@ -1998,11 +1865,7 @@ textarea {
 }
 
 /* ---------- Inbox トリアージ（v2） ---------- */
-.chip-sep {
-  width: 1px;
-  background: var(--border-strong);
-  margin: 2px 4px;
-}
+
 .inbox-row {
   cursor: pointer;
   position: relative;
@@ -2094,30 +1957,6 @@ kbd {
 .profile-select {
   font-size: 12px;
   max-width: 120px;
-}
-.mem-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 12.5px;
-  padding: 3px 0;
-}
-.mem-bar {
-  width: 120px;
-  height: 6px;
-  border-radius: 3px;
-  background: var(--hover);
-  overflow: hidden;
-}
-.mem-bar span {
-  display: block;
-  height: 100%;
-  background: var(--accent);
-}
-.mem-mb {
-  width: 64px;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
 }
 
 /* ---------- 共通（v2） ---------- */
@@ -2322,7 +2161,7 @@ kbd {
 .task-toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 10px;
   flex-wrap: wrap;
   margin: 14px 0 18px;
@@ -2743,3 +2582,144 @@ kbd {
   background: var(--accent-soft);
 }
 
+/* ---------- メニューバーのミニ版 ---------- */
+html:has(.tray),
+body:has(.tray),
+body:has(.tray) #root {
+  background: transparent;
+  height: 100%;
+  overflow: hidden;
+}
+.tray {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  padding: 10px 12px 12px;
+  box-sizing: border-box;
+  color: var(--text);
+  font-size: 13px;
+  user-select: none;
+}
+.tray-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 2px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.tray-profile {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 600;
+}
+.tray-date {
+  margin-left: auto;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.tray-section {
+  padding: 10px 2px 4px;
+}
+.tray-section.grow {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.tray-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+  border: none;
+  background: transparent;
+  padding: 0;
+}
+.tray-label.link:hover {
+  color: var(--accent);
+}
+.tray-count {
+  margin-left: 2px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10.5px;
+  line-height: 16px;
+}
+.tray-event {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+}
+.tray-event-time {
+  font-weight: 600;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.tray-event-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tray-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 6px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
+}
+.tray-row:not(.static):hover {
+  background: var(--hover);
+}
+.tray-row-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tray-due {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+.tray-due.overdue {
+  color: var(--danger);
+}
+.tray-empty {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  padding: 2px 6px 4px;
+}
+.tray-add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px dashed var(--border-strong);
+  color: var(--text-tertiary);
+}
+.tray-add input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+}

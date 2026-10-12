@@ -4,8 +4,6 @@ import { persist } from 'zustand/middleware';
 import type {
   Service,
   ServiceTemplate,
-  ReadLaterItem,
-  FocusMode,
   RecentEntry,
   AppNotification,
   HistoryEntry,
@@ -22,8 +20,6 @@ export type ViewKey =
   | 'today'
   | 'inbox'
   | 'tasks'
-  | 'readLater'
-  | 'focus'
   | 'settings'
   | 'service'; // 個別サービスの Web 表示
 
@@ -72,15 +68,10 @@ type AppState = {
   aiEnabled: boolean;
   /** 使っていないサービスを休止させるまでの分数（0 で無効） */
   hibernateMinutes: number;
-  readLater: ReadLaterItem[];
   recent: RecentEntry[];
-  focusMode: FocusMode;
-  focusServiceIds: string[]; // 集中モードで表示するサービス
   lastServiceId: string | null;
   /** サービスごとに最後に開いていた URL（次回はここから開く） */
   serviceUrls: Record<string, string>;
-  /** OS 通知の ON/OFF（既定 ON） */
-  notificationsEnabled: boolean;
   /** 起動時に全サービスを自動で読み込む（通知ハブ用、既定 ON） */
   autoloadServices: boolean;
   /** 新着通知のときにアプリ内で音を鳴らす（既定 OFF） */
@@ -179,6 +170,8 @@ type AppState = {
   // --- Inbox トリアージ ---
   markNotificationDone: (id: string) => void;
   snoozeNotification: (id: string, until: string) => void;
+  /** 完了・スヌーズした通知を受信箱に戻す */
+  restoreNotification: (id: string) => void;
   /** スヌーズ期限が過ぎた通知を戻す */
   wakeSnoozed: () => void;
   setNotificationMeta: (
@@ -194,7 +187,6 @@ type AppState = {
   // --- ナビゲーション ---
   setView: (view: ViewKey) => void;
   openService: (id: string) => void;
-  setNotificationsEnabled: (enabled: boolean) => void;
   setAutoloadServices: (enabled: boolean) => void;
   setNotificationSound: (enabled: boolean) => void;
   setHistoryEnabled: (enabled: boolean) => void;
@@ -252,18 +244,10 @@ type AppState = {
   /** テンプレートが追加済みか（name + url で照合） */
   isTemplateAdded: (template: ServiceTemplate) => boolean;
 
-  // --- 集中モード ---
-  setFocusMode: (mode: FocusMode) => void;
-  toggleFocusService: (id: string) => void;
 
-  // --- あとで見る ---
-  addReadLater: (item: Omit<ReadLaterItem, 'id' | 'createdAt'>) => void;
-  removeReadLater: (id: string) => void;
-  updateReadLaterNote: (id: string, note: string) => void;
 
   // --- データ削除 ---
   clearServices: () => void;
-  clearReadLater: () => void;
   clearRecent: () => void;
   clearAll: () => void;
 };
@@ -289,16 +273,7 @@ try {
 }
 
 // Home ウィジェットの既定の並び順（新規ユーザー・リセット時）
-export const DEFAULT_HOME_WIDGETS = [
-  'stats',
-  'tasks',
-  'notifications',
-  'calendar',
-  'classroom',
-  'frequent',
-  'readLater',
-  'focus',
-];
+export const DEFAULT_HOME_WIDGETS = ['tasks', 'notifications', 'calendar', 'classroom'];
 
 export const useAppStore = create<AppState>()(
   persist(
@@ -310,15 +285,9 @@ export const useAppStore = create<AppState>()(
       tasks: [],
       aiEnabled: true,
       hibernateMinutes: 30,
-      readLater: [],
       recent: [],
-      focusMode: 'normal',
-      focusServiceIds: [],
       lastServiceId: null,
       serviceUrls: {},
-      // 既定は OFF。各サービス自身の Web 通知（Gmail/Calendar/Slack 等の
-      // 「デスクトップ通知」）を主役にし、これは予備（タイトル/フィードからの簡易通知）。
-      notificationsEnabled: false,
       autoloadServices: true,
       notificationSound: false,
       calendarRaw: [],
@@ -469,6 +438,12 @@ export const useAppStore = create<AppState>()(
             n.id === id ? { ...n, snoozedUntil: until, read: true } : n
           ),
         }),
+      restoreNotification: (id) =>
+        set({
+          notifications: get().notifications.map((n) =>
+            n.id === id ? { ...n, done: false, snoozedUntil: undefined } : n
+          ),
+        }),
       wakeSnoozed: () => {
         const now = Date.now();
         const due = get().notifications.some(
@@ -499,8 +474,6 @@ export const useAppStore = create<AppState>()(
       setHibernateMinutes: (min) =>
         set({ hibernateMinutes: Math.max(0, Math.round(min)) }),
 
-      setNotificationsEnabled: (enabled) =>
-        set({ notificationsEnabled: enabled }),
 
       setAutoloadServices: (enabled) => set({ autoloadServices: enabled }),
       setNotificationSound: (enabled) => set({ notificationSound: enabled }),
@@ -565,11 +538,7 @@ export const useAppStore = create<AppState>()(
             services: s.services,
             profiles: s.profiles,
             tasks: s.tasks,
-            readLater: s.readLater,
-            focusMode: s.focusMode,
-            focusServiceIds: s.focusServiceIds,
             serviceUrls: s.serviceUrls,
-            notificationsEnabled: s.notificationsEnabled,
             autoloadServices: s.autoloadServices,
             notificationSound: s.notificationSound,
             historyEnabled: s.historyEnabled,
@@ -602,11 +571,7 @@ export const useAppStore = create<AppState>()(
             'services',
             'profiles',
             'tasks',
-            'readLater',
-            'focusMode',
-            'focusServiceIds',
             'serviceUrls',
-            'notificationsEnabled',
             'autoloadServices',
             'notificationSound',
             'historyEnabled',
@@ -821,7 +786,6 @@ export const useAppStore = create<AppState>()(
           history: get().history.filter((h) => h.serviceId !== id),
           mutedServices: get().mutedServices.filter((x) => x !== id),
           importantServices: get().importantServices.filter((x) => x !== id),
-          focusServiceIds: get().focusServiceIds.filter((x) => x !== id),
           recent: get().recent.filter((r) => r.serviceId !== id),
           activeServiceId: get().activeServiceId === id ? null : get().activeServiceId,
           activeView:
@@ -854,53 +818,21 @@ export const useAppStore = create<AppState>()(
         );
       },
 
-      setFocusMode: (mode) => set({ focusMode: mode }),
-
-      toggleFocusService: (id) => {
-        const has = get().focusServiceIds.includes(id);
-        set({
-          focusServiceIds: has
-            ? get().focusServiceIds.filter((x) => x !== id)
-            : [...get().focusServiceIds, id],
-        });
-      },
-
-      addReadLater: (item) =>
-        set({
-          readLater: [
-            { ...item, id: uid(), createdAt: new Date().toISOString() },
-            ...get().readLater,
-          ],
-        }),
-
-      removeReadLater: (id) =>
-        set({ readLater: get().readLater.filter((r) => r.id !== id) }),
-
-      updateReadLaterNote: (id, note) =>
-        set({
-          readLater: get().readLater.map((r) =>
-            r.id === id ? { ...r, note } : r
-          ),
-        }),
-
       clearServices: () =>
         set({
           services: [],
           serviceUrls: {},
           mutedServices: [],
           importantServices: [],
-          focusServiceIds: [],
           activeServiceId: null,
           lastServiceId: null,
           activeView: 'today',
         }),
-      clearReadLater: () => set({ readLater: [] }),
       clearRecent: () => set({ recent: [] }),
       clearAll: () =>
         set({
           services: [],
           serviceUrls: {},
-          readLater: [],
           recent: [],
           notifications: [],
           tasks: [],
@@ -910,8 +842,6 @@ export const useAppStore = create<AppState>()(
           serviceBadges: {},
           mutedServices: [],
           importantServices: [],
-          focusServiceIds: [],
-          focusMode: 'normal',
           activeServiceId: null,
           lastServiceId: null,
           activeView: 'today',
@@ -920,7 +850,7 @@ export const useAppStore = create<AppState>()(
     {
       name: 'workone-store',
       // 永続化するキーだけを選ぶ（UI ナビゲーション状態は除外）
-      version: 3,
+      version: 4,
       // v1 → v2: 既存サービスは既定プロファイルへ。通知は以前は保存していなかった。
       migrate: (persisted: any, version) => {
         if (persisted && version < 2) {
@@ -940,6 +870,29 @@ export const useAppStore = create<AppState>()(
             }
           );
         }
+        // v3 → v4: 「あとで見る」をタスクへ統合し、集中モードと予備通知の設定を廃止
+        if (persisted && version < 4) {
+          const services: Service[] = persisted.services ?? [];
+          const moved: Task[] = (persisted.readLater ?? []).map((r: any) => {
+            const svc = services.find((x) => x.name === r.serviceName);
+            return {
+              id: r.id ?? uid(),
+              title: r.title,
+              url: r.url || undefined,
+              note: r.note || undefined,
+              source: 'page',
+              serviceId: svc?.id,
+              profileId: svc?.profileId ?? DEFAULT_PROFILE_ID,
+              done: false,
+              createdAt: r.createdAt ?? new Date().toISOString(),
+            } as Task;
+          });
+          persisted.tasks = [...(persisted.tasks ?? []), ...moved];
+          delete persisted.readLater;
+          delete persisted.focusMode;
+          delete persisted.focusServiceIds;
+          delete persisted.notificationsEnabled;
+        }
         return persisted;
       },
       partialize: (state) => ({
@@ -951,13 +904,9 @@ export const useAppStore = create<AppState>()(
         aiEnabled: state.aiEnabled,
         hibernateMinutes: state.hibernateMinutes,
         notifications: state.notifications,
-        readLater: state.readLater,
         recent: state.recent,
-        focusMode: state.focusMode,
-        focusServiceIds: state.focusServiceIds,
         lastServiceId: state.lastServiceId,
         serviceUrls: state.serviceUrls,
-        notificationsEnabled: state.notificationsEnabled,
         autoloadServices: state.autoloadServices,
         notificationSound: state.notificationSound,
         calendarRaw: state.calendarRaw,

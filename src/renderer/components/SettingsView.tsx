@@ -26,9 +26,6 @@ export function SettingsView() {
   const profiles = useAppStore((s) => s.profiles);
   const moveServiceToProfile = useAppStore((s) => s.moveServiceToProfile);
   const setServiceKeepAlive = useAppStore((s) => s.setServiceKeepAlive);
-  const focusServiceIds = useAppStore((s) => s.focusServiceIds);
-  const notificationsEnabled = useAppStore((s) => s.notificationsEnabled);
-  const setNotificationsEnabled = useAppStore((s) => s.setNotificationsEnabled);
   const autoloadServices = useAppStore((s) => s.autoloadServices);
   const setAutoloadServices = useAppStore((s) => s.setAutoloadServices);
   const notificationSound = useAppStore((s) => s.notificationSound);
@@ -153,13 +150,11 @@ export function SettingsView() {
   };
   const removeService = useAppStore((s) => s.removeService);
   const reorderServices = useAppStore((s) => s.reorderServices);
-  const toggleFocusService = useAppStore((s) => s.toggleFocusService);
   const mutedServices = useAppStore((s) => s.mutedServices);
   const importantServices = useAppStore((s) => s.importantServices);
   const toggleMutedService = useAppStore((s) => s.toggleMutedService);
   const toggleImportantService = useAppStore((s) => s.toggleImportantService);
   const clearServices = useAppStore((s) => s.clearServices);
-  const clearReadLater = useAppStore((s) => s.clearReadLater);
   const clearRecent = useAppStore((s) => s.clearRecent);
   const clearAll = useAppStore((s) => s.clearAll);
 
@@ -246,24 +241,12 @@ export function SettingsView() {
                 >
                   <LuPin size={15} fill={svc.keepAlive ? 'currentColor' : 'none'} />
                 </button>
-                <label
-                  className="muted"
-                  style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-                  title="集中モードで表示"
-                >
-                  <input
-                    type="checkbox"
-                    checked={focusServiceIds.includes(svc.id)}
-                    onChange={() => toggleFocusService(svc.id)}
-                  />
-                  集中
-                </label>
                 <button
                   className="icon-btn"
                   title={
                     importantServices.includes(svc.id)
                       ? '重要を解除'
-                      : '重要にする（集中モードでも通知）'
+                      : '重要にする（おやすみ時間中も通知）'
                   }
                   onClick={() => toggleImportantService(svc.id)}
                   style={{
@@ -318,7 +301,7 @@ export function SettingsView() {
           </div>
         )}
         <p className="muted" style={{ marginTop: 10 }}>
-          並び替えは矢印ボタンで行います。「集中」のチェックは集中モードでの表示対象です。
+          並び替えは矢印ボタンで行います。★の重要サービスは、おやすみ時間中も通知されます。
         </p>
       </div>
 
@@ -476,21 +459,6 @@ export function SettingsView() {
               <div className="muted" style={{ marginTop: 2 }}>
                 オンにすると、開いていないサービスの通知や未読も受け取れます。
                 オフにすると一度開いたサービスのみ対象（軽量）。
-              </div>
-            </span>
-          </label>
-          <label className="check-row">
-            <input
-              type="checkbox"
-              checked={notificationsEnabled}
-              onChange={(e) => setNotificationsEnabled(e.target.checked)}
-            />
-            <span className="grow">
-              アプリ側でも簡易通知を出す（予備）
-              <div className="muted" style={{ marginTop: 2 }}>
-                各サービスの通知が使えない場合用。開いているサービスのタイトルや
-                Gmail のフィードから新着を検知して通知します。各サービスの通知と
-                重複する場合はオフにしてください。
               </div>
             </span>
           </label>
@@ -719,14 +687,6 @@ export function SettingsView() {
           <button
             className="btn"
             onClick={() =>
-              confirmThen('「あとで見る」をすべて削除しますか？', clearReadLater)
-            }
-          >
-            あとで見るを削除
-          </button>
-          <button
-            className="btn"
-            onClick={() =>
               confirmThen('最近開いた履歴を削除しますか？', clearRecent)
             }
           >
@@ -794,7 +754,7 @@ export function SettingsView() {
             <FiShield size={18} className="info-icon" />
             <div>
               WorkOne は ID・パスワード・メール本文・チャット本文などを
-              保存しません。保存するのは追加したサービス、並び順、あとで見る、
+              保存しません。保存するのは追加したサービス、並び順、タスク、
               最近開いた履歴などの設定情報だけです。
             </div>
           </div>

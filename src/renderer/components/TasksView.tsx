@@ -15,6 +15,8 @@ import {
   FiList,
   FiX,
   FiCheckSquare,
+  FiBookmark,
+  FiLayers,
 } from 'react-icons/fi';
 import { useAppStore } from '../store/useAppStore';
 import type { Task, TaskPriority, TaskRepeat } from '../types/service';
@@ -41,6 +43,7 @@ const SOURCE_ICON = {
   notification: <FiInbox size={12} />,
   classroom: <FiBookOpen size={12} />,
   ai: <FiCpu size={12} />,
+  page: <FiBookmark size={12} />,
 };
 
 const uid = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
@@ -73,6 +76,8 @@ export function TasksView() {
   const services = useAppStore((s) => s.services);
 
   const [allProfiles, setAllProfiles] = useState(false);
+  // 「あとで見る」= サービスのページを保存したタスクだけを表示
+  const [onlyPages, setOnlyPages] = useState(false);
   const [showDone, setShowDone] = useState(false);
   const [sort, setSort] = useState<Sort>('due');
   const [query, setQuery] = useState('');
@@ -87,12 +92,13 @@ export function TasksView() {
     return tasks.filter(
       (t) =>
         (allProfiles || t.profileId === activeProfileId) &&
+        (!onlyPages || t.source === 'page') &&
         (!q ||
           t.title.toLowerCase().includes(q) ||
           (t.note ?? '').toLowerCase().includes(q) ||
           (t.subtasks ?? []).some((s) => s.title.toLowerCase().includes(q)))
     );
-  }, [tasks, allProfiles, activeProfileId, query]);
+  }, [tasks, allProfiles, activeProfileId, query, onlyPages]);
 
   const open = visible.filter((t) => !t.done);
   const done = visible
@@ -368,30 +374,36 @@ export function TasksView() {
       </div>
 
       <div className="task-toolbar">
-        <div className="filter-chips" style={{ margin: 0 }}>
-          <button className={`chip ${!allProfiles ? 'active' : ''}`} onClick={() => setAllProfiles(false)}>
-            このプロファイル
+        <div className="toolbar-controls">
+          <label className="task-search">
+            <FiSearch size={13} />
+            <input value={query} placeholder="絞り込み" onChange={(e) => setQuery(e.target.value)} />
+          </label>
+          <select
+            className="toolbar-select"
+            value={sort}
+            onChange={(e) => setSort(e.target.value as Sort)}
+            title="並び順"
+          >
+            <option value="due">期限順</option>
+            <option value="priority">優先度順</option>
+            <option value="created">追加順</option>
+          </select>
+          <button
+            className={`icon-btn toolbar-toggle ${onlyPages ? 'on' : ''}`}
+            title={onlyPages ? 'あとで見る（保存したページ）だけを表示中' : 'あとで見る（保存したページ）だけを表示'}
+            onClick={() => setOnlyPages((v) => !v)}
+          >
+            <FiBookmark size={15} />
           </button>
-          <button className={`chip ${allProfiles ? 'active' : ''}`} onClick={() => setAllProfiles(true)}>
-            全プロファイル
+          <button
+            className={`icon-btn toolbar-toggle ${allProfiles ? 'on' : ''}`}
+            title={allProfiles ? '全プロファイルのタスクを表示中' : 'このプロファイルのタスクだけを表示中'}
+            onClick={() => setAllProfiles((v) => !v)}
+          >
+            <FiLayers size={15} />
           </button>
-          <span className="chip-sep" />
-          {(
-            [
-              ['due', '期限順'],
-              ['priority', '優先度順'],
-              ['created', '追加順'],
-            ] as [Sort, string][]
-          ).map(([k, label]) => (
-            <button key={k} className={`chip ${sort === k ? 'active' : ''}`} onClick={() => setSort(k)}>
-              {label}
-            </button>
-          ))}
         </div>
-        <label className="task-search">
-          <FiSearch size={13} />
-          <input value={query} placeholder="絞り込み" onChange={(e) => setQuery(e.target.value)} />
-        </label>
       </div>
 
       {open.length === 0 && (

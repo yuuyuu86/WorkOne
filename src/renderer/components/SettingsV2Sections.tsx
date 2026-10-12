@@ -4,19 +4,6 @@ import { useAppStore } from '../store/useAppStore';
 import { ProfileEditModal } from './ProfileEditModal';
 import { ProfileIcon } from '../lib/profileIcons';
 
-// 表示中の webview から serviceId と webContentsId の対応を集める
-function collectWebviews(): { id: string; wcId: number }[] {
-  return Array.from(document.querySelectorAll<any>('webview[data-service-id]'))
-    .map((el) => {
-      try {
-        return { id: el.dataset.serviceId as string, wcId: el.getWebContentsId() as number };
-      } catch {
-        return null; // まだ dom-ready 前
-      }
-    })
-    .filter((x): x is { id: string; wcId: number } => x !== null);
-}
-
 const DAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'];
 
 /** 設定画面に追加する v2 の項目（プロファイル・AI・パフォーマンス） */
@@ -31,24 +18,12 @@ export function SettingsV2Sections() {
   const setHibernateMinutes = useAppStore((s) => s.setHibernateMinutes);
   const [editing, setEditing] = useState<string | 'new' | null>(null);
   const [aiStatus, setAiStatus] = useState<{ available: boolean; reason?: string } | null>(null);
-  const [memory, setMemory] = useState<{ id: string; mb: number }[] | null>(null);
 
   useEffect(() => {
     window.workOne?.ai
       ?.status()
       .then(setAiStatus)
       .catch(() => setAiStatus({ available: false, reason: '確認できませんでした' }));
-  }, []);
-
-  useEffect(() => {
-    const load = () =>
-      window.workOne
-        ?.webviewMemory?.(collectWebviews())
-        .then(setMemory)
-        .catch(() => setMemory(null));
-    load();
-    const t = setInterval(load, 10000);
-    return () => clearInterval(t);
   }, []);
 
   const countOf = (pid: string) =>
@@ -61,8 +36,6 @@ export function SettingsV2Sections() {
       .map((s) => `${s.days.map((d) => DAY_LABELS[d]).join('')} ${s.start}〜${s.end}`)
       .join(' / ');
   };
-
-  const totalMb = memory?.reduce((a, m) => a + m.mb, 0) ?? 0;
 
   return (
     <>
@@ -170,28 +143,6 @@ export function SettingsV2Sections() {
               <option value={180}>3 時間</option>
             </select>
           </div>
-          {memory && memory.length > 0 && (
-            <div className="list-row" style={{ display: 'block' }}>
-              <div className="row-title" style={{ marginBottom: 6 }}>
-                サービスのメモリ使用量（合計 {totalMb} MB）
-              </div>
-              {memory
-                .slice()
-                .sort((a, b) => b.mb - a.mb)
-                .map((m) => {
-                  const svc = services.find((s) => s.id === m.id);
-                  return (
-                    <div key={m.id} className="mem-row">
-                      <span className="grow">{svc?.name ?? m.id}</span>
-                      <span className="mem-bar">
-                        <span style={{ width: `${Math.min(100, (m.mb / Math.max(1, totalMb)) * 100)}%` }} />
-                      </span>
-                      <span className="muted mem-mb">{m.mb} MB</span>
-                    </div>
-                  );
-                })}
-            </div>
-          )}
         </div>
       </div>
 

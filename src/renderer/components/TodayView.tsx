@@ -1,15 +1,10 @@
 import { useEffect, useState } from 'react';
 import {
   FiPlus,
-  FiTarget,
-  FiBookmark,
   FiSunrise,
   FiSun,
   FiSunset,
   FiMoon,
-  FiBell,
-  FiGrid,
-  FiMail,
   FiX,
   FiEdit2,
   FiCheck,
@@ -30,6 +25,7 @@ import { fileToResizedDataUrl } from '../lib/image';
 import { ServiceIcon } from './ServiceIcon';
 import { WeatherIcon } from './WeatherIcon';
 import { HomeTasksWidget } from './HomeTasksWidget';
+import { timeAgo } from '../lib/time';
 import { ClassroomCard } from './ClassroomCard';
 import { CalendarCard } from './CalendarCard';
 import {
@@ -40,22 +36,12 @@ import {
   type Weather,
 } from '../lib/weather';
 
-const FOCUS_LABEL: Record<string, string> = {
-  normal: '通常モード',
-  focus: '集中モード',
-  deep: '完全集中モード',
-};
-
 // 編集モードでウィジェットに表示する名称
 const WIDGET_LABELS: Record<string, string> = {
-  stats: 'サマリー',
   tasks: 'タスク',
   notifications: '対応が必要な通知',
   calendar: '今日の予定',
   classroom: 'Classroomの課題',
-  frequent: 'よく使うサービス',
-  readLater: 'あとで見る',
-  focus: '集中モードの状態',
 };
 
 // 深夜（0〜4時）に Home を開いたときの一言（日替わりで固定、再読込で変わらないように）
@@ -94,29 +80,14 @@ function greeting(hour: number) {
   return { text: 'こんばんは', Icon: FiMoon, color: '#5C6BC0' };
 }
 
-function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return 'たった今';
-  if (m < 60) return `${m}分前`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}時間前`;
-  return new Date(iso).toLocaleDateString('ja-JP');
-}
-
 type Props = {
   onOpenAdd: () => void;
 };
 
 export function TodayView({ onOpenAdd }: Props) {
   const services = useProfileServices();
-  const recent = useAppStore((s) => s.recent);
-  const readLater = useAppStore((s) => s.readLater);
   const notifications = useAppStore((s) => s.notifications);
-  const serviceBadges = useAppStore((s) => s.serviceBadges);
-  const focusMode = useAppStore((s) => s.focusMode);
   const openService = useAppStore((s) => s.openService);
-  const setView = useAppStore((s) => s.setView);
   const markNotificationRead = useAppStore((s) => s.markNotificationRead);
   const weatherEnabled = useAppStore((s) => s.weatherEnabled);
   const weatherLocation = useAppStore((s) => s.weatherLocation);
@@ -176,12 +147,6 @@ export function TodayView({ onOpenAdd }: Props) {
     minute: '2-digit',
   });
 
-  const totalUnread = Object.values(serviceBadges).reduce(
-    (a, b) => a + (b > 0 ? b : 0),
-    0
-  );
-  const unreadNotifs = notifications.filter((n) => !n.read).length;
-
   const hasServiceHost = (host: string) =>
     services.some((s) => {
       try {
@@ -204,14 +169,6 @@ export function TodayView({ onOpenAdd }: Props) {
   } else if (isWeekday && hasClassroom && classroomItems.length === 0) {
     heroNote = pickByDate(NO_TASK_MESSAGES, dateKey);
   }
-
-  const recentServices = recent
-    .map((r) => services.find((s) => s.id === r.serviceId))
-    .filter((s): s is NonNullable<typeof s> => Boolean(s));
-
-  const frequent = recentServices.length
-    ? recentServices.slice(0, 6)
-    : services.slice(0, 6);
 
   // --- Home ウィジェット設定 ---
   const homeWidgetOrder = useAppStore((s) => s.homeWidgetOrder);
@@ -239,20 +196,14 @@ export function TodayView({ onOpenAdd }: Props) {
 
   const widgetHasContent = (id: string): boolean => {
     switch (id) {
-      case 'stats':
-      case 'focus':
       case 'tasks':
         return true;
       case 'notifications':
-        return notifications.length > 0;
+        return notifications.some((n) => !n.done && !n.snoozedUntil);
       case 'calendar':
         return hasCalendar;
       case 'classroom':
         return hasClassroom;
-      case 'frequent':
-        return frequent.length > 0;
-      case 'readLater':
-        return readLater.length > 0;
       default:
         return false;
     }
@@ -326,43 +277,6 @@ export function TodayView({ onOpenAdd }: Props) {
 
   const renderWidget = (id: string): React.ReactNode => {
     switch (id) {
-      case 'stats':
-        return (
-          <div className="stat-grid" style={{ margin: 0 }}>
-            <div className={`stat-tile ${totalUnread > 0 ? 'danger' : ''}`}>
-              <div className="stat-head">
-                <FiMail size={14} /> 未読合計
-              </div>
-              <div className="stat-value">{totalUnread}</div>
-            </div>
-            <button
-              className="stat-tile accent"
-              style={{ cursor: 'pointer', textAlign: 'left' }}
-              onClick={() => setView('inbox')}
-            >
-              <div className="stat-head">
-                <FiBell size={14} /> 新着通知
-              </div>
-              <div className="stat-value">{unreadNotifs}</div>
-            </button>
-            <div className="stat-tile">
-              <div className="stat-head">
-                <FiGrid size={14} /> サービス
-              </div>
-              <div className="stat-value">{services.length}</div>
-            </div>
-            <button
-              className="stat-tile"
-              style={{ cursor: 'pointer', textAlign: 'left' }}
-              onClick={() => setView('readLater')}
-            >
-              <div className="stat-head">
-                <FiBookmark size={14} /> あとで見る
-              </div>
-              <div className="stat-value">{readLater.length}</div>
-            </button>
-          </div>
-        );
       case 'notifications':
         return (
           <div className="section" style={{ margin: 0 }}>
@@ -405,79 +319,6 @@ export function TodayView({ onOpenAdd }: Props) {
         return <CalendarCard />;
       case 'classroom':
         return <ClassroomCard />;
-      case 'frequent':
-        return (
-          <div className="section" style={{ margin: 0 }}>
-            <h3 className="section-title">よく使うサービス</h3>
-            <div className="shortcut-grid">
-              {frequent.map((svc) => (
-                <button
-                  key={svc.id}
-                  className="shortcut-tile"
-                  onClick={() => openService(svc.id)}
-                >
-                  <ServiceIcon iconKey={svc.icon} chip={34} />
-                  <span className="tile-name">
-                    {svc.name}
-                    {serviceBadges[svc.id] > 0
-                      ? `（${serviceBadges[svc.id]}）`
-                      : ''}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        );
-      case 'readLater':
-        return (
-          <div className="section" style={{ margin: 0 }}>
-            <h3 className="section-title">あとで見る</h3>
-            <div className="card">
-              {readLater.slice(0, 4).map((item) => (
-                <div className="list-row" key={item.id}>
-                  <FiBookmark size={16} style={{ color: 'var(--accent)' }} />
-                  <div className="grow">
-                    <div className="row-title">{item.title}</div>
-                    <div className="row-sub">{item.serviceName}</div>
-                  </div>
-                  <button
-                    className="btn btn-sm"
-                    onClick={() => window.workOne.openExternal(item.url)}
-                  >
-                    開く
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      case 'focus':
-        return (
-          <div className="section" style={{ margin: 0 }}>
-            <h3 className="section-title">集中モードの状態</h3>
-            <span
-              className={`status-pill ${
-                focusMode !== 'normal' ? 'active-mode' : ''
-              }`}
-            >
-              {focusMode === 'deep' ? (
-                <FiMoon size={14} />
-              ) : focusMode === 'focus' ? (
-                <FiTarget size={14} />
-              ) : (
-                <FiGrid size={14} />
-              )}
-              {FOCUS_LABEL[focusMode]}
-            </span>
-            <button
-              className="btn btn-sm"
-              style={{ marginLeft: 10 }}
-              onClick={() => setView('focus')}
-            >
-              変更
-            </button>
-          </div>
-        );
       default:
         return null;
     }

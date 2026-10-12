@@ -58,14 +58,6 @@ export type ServiceTemplate = Omit<Service, 'id' | 'createdAt' | 'isCustom'> & {
   description: string;
 };
 
-export type ReadLaterItem = {
-  id: string;
-  title: string;
-  url: string;
-  serviceName: string;
-  note?: string;
-  createdAt: string;
-};
 
 /**
  * 統合 Inbox に集約する通知アイテム。
@@ -82,7 +74,7 @@ export type AppNotification = {
   body: string;
   receivedAt: string;
   read: boolean;
-  /** 重要サービス由来の通知（重要グループでフィルタ・集中モードでも通知） */
+  /** 重要サービス由来の通知（重要タブで絞り込み・おやすみ時間中も通知） */
   important: boolean;
   /** トリアージで完了にした */
   done?: boolean;
@@ -99,7 +91,8 @@ export type AppNotification = {
 };
 
 /** タスク */
-export type TaskSource = 'manual' | 'notification' | 'classroom' | 'ai';
+/** page = サービスのページを「あとで見る」として保存したもの */
+export type TaskSource = 'manual' | 'notification' | 'classroom' | 'ai' | 'page';
 
 export type TaskPriority = 'high' | 'normal' | 'low';
 export type TaskRepeat = 'daily' | 'weekdays' | 'weekly' | 'monthly';
@@ -128,9 +121,6 @@ export type Task = {
   doneAt?: string;
   createdAt: string;
 };
-
-/** 集中モードの種類 */
-export type FocusMode = 'normal' | 'focus' | 'deep';
 
 /**
  * 閲覧履歴の1件。実際に開いたページのタイトルと URL を記録し、
