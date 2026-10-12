@@ -25,6 +25,7 @@ import { fileToResizedDataUrl } from '../lib/image';
 import { ServiceIcon } from './ServiceIcon';
 import { WeatherIcon } from './WeatherIcon';
 import { HomeTasksWidget } from './HomeTasksWidget';
+import { timeAgo } from '../lib/time';
 import { ClassroomCard } from './ClassroomCard';
 import { CalendarCard } from './CalendarCard';
 import {
@@ -77,16 +78,6 @@ function greeting(hour: number) {
   if (hour >= 17 && hour < 22)
     return { text: 'こんばんは', Icon: FiSunset, color: '#FF7043' };
   return { text: 'こんばんは', Icon: FiMoon, color: '#5C6BC0' };
-}
-
-function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return 'たった今';
-  if (m < 60) return `${m}分前`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}時間前`;
-  return new Date(iso).toLocaleDateString('ja-JP');
 }
 
 type Props = {

@@ -170,6 +170,8 @@ type AppState = {
   // --- Inbox トリアージ ---
   markNotificationDone: (id: string) => void;
   snoozeNotification: (id: string, until: string) => void;
+  /** 完了・スヌーズした通知を受信箱に戻す */
+  restoreNotification: (id: string) => void;
   /** スヌーズ期限が過ぎた通知を戻す */
   wakeSnoozed: () => void;
   setNotificationMeta: (
@@ -434,6 +436,12 @@ export const useAppStore = create<AppState>()(
         set({
           notifications: get().notifications.map((n) =>
             n.id === id ? { ...n, snoozedUntil: until, read: true } : n
+          ),
+        }),
+      restoreNotification: (id) =>
+        set({
+          notifications: get().notifications.map((n) =>
+            n.id === id ? { ...n, done: false, snoozedUntil: undefined } : n
           ),
         }),
       wakeSnoozed: () => {

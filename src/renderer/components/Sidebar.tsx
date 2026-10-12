@@ -62,7 +62,6 @@ export function Sidebar({
   // ドラッグ並び替え。
   // id ベースで扱う（グループ表示でも崩れないように）。
   const [dragId, setDragId] = useState<string | null>(null);
-  const canReorder = true;
 
   // プロファイル切り替え時に、Arc のように中身を横にスライドさせる
   const activeProfileId = useAppStore((s) => s.activeProfileId);
@@ -170,10 +169,10 @@ export function Sidebar({
       } ${dragId === svc.id ? 'dragging' : ''}`}
       onClick={() => openService(svc.id)}
       title={svc.name}
-      draggable={canReorder}
-      onDragStart={() => canReorder && setDragId(svc.id)}
-      onDragOver={(e) => canReorder && e.preventDefault()}
-      onDrop={() => canReorder && handleDropOn(svc)}
+      draggable
+      onDragStart={() => setDragId(svc.id)}
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={() => handleDropOn(svc)}
       onDragEnd={() => setDragId(null)}
     >
       <ServiceIcon iconKey={svc.icon} chip={sub ? 18 : 22} />

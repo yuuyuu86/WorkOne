@@ -1506,29 +1506,6 @@ textarea {
   min-width: 160px;
 }
 
-/* ---------- フィルタチップ ---------- */
-.filter-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 12px;
-}
-
-.filter-chips .chip {
-  border: 1px solid var(--border-strong);
-  background: var(--panel-bg);
-  color: var(--text-secondary);
-  padding: 4px 12px;
-  border-radius: 999px;
-  font-size: 12.5px;
-}
-
-.filter-chips .chip.active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-}
-
 /* ---------- コマンドパレット（検索 Cmd+K） ---------- */
 .command-palette {
   position: fixed;
@@ -1728,91 +1705,6 @@ textarea {
   color: var(--text-secondary);
 }
 
-.stat-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 12px;
-  margin-bottom: 32px;
-}
-
-.stat-tile {
-  background: var(--panel-bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  padding: 14px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.stat-tile .stat-head {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  color: var(--text-secondary);
-  font-size: 12.5px;
-}
-
-.stat-tile .stat-value {
-  font-size: 26px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-
-.stat-tile.accent .stat-value {
-  color: var(--accent);
-}
-
-.stat-tile.danger .stat-value {
-  color: var(--danger);
-}
-
-.shortcut-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 10px;
-}
-
-.shortcut-tile {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--panel-bg);
-  text-align: left;
-  transition: background 0.12s ease;
-}
-
-.shortcut-tile:hover {
-  background: var(--hover);
-}
-
-.shortcut-tile .tile-name {
-  font-weight: 600;
-  font-size: 13.5px;
-}
-
-.status-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 12px;
-  border-radius: 999px;
-  background: var(--hover);
-  font-size: 12.5px;
-  font-weight: 500;
-  color: var(--text-secondary);
-}
-
-.status-pill.active-mode {
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
 .reorder-btns {
   display: flex;
   flex-direction: column;
@@ -1973,11 +1865,7 @@ textarea {
 }
 
 /* ---------- Inbox トリアージ（v2） ---------- */
-.chip-sep {
-  width: 1px;
-  background: var(--border-strong);
-  margin: 2px 4px;
-}
+
 .inbox-row {
   cursor: pointer;
   position: relative;
@@ -2693,7 +2581,6 @@ kbd {
   color: var(--accent);
   background: var(--accent-soft);
 }
-
 
 /* ---------- メニューバーのミニ版 ---------- */
 html:has(.tray),
