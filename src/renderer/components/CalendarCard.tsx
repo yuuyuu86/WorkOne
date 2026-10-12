@@ -3,6 +3,17 @@ import { FiCalendar, FiRefreshCw } from 'react-icons/fi';
 import { useAppStore } from '../store/useAppStore';
 import { todayEvents, type Parsed } from '../lib/calendar';
 
+type Row = {
+  kind: 'event' | 'task';
+  id: string;
+  title: string;
+  when: string;
+  startMin: number;
+};
+
+const pad = (x: number) => String(x).padStart(2, '0');
+const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
 export function CalendarCard() {
   // 認証情報には触れず、カレンダー webview が取得した「予定の表示名」だけを
   // ストア経由でキャッシュしている。それを今日分にパースして表示する。
@@ -17,9 +28,37 @@ export function CalendarCard() {
     [calendarRaw]
   );
 
-  // 終日イベントはまとめて上にコンパクト表示、時刻つき予定は下に時間順で表示
+  // 今日が期限の時刻つきタスク（このプロファイル・未完了）も予定と一緒に時間順で並べる
+  const tasks = useAppStore((s) => s.tasks);
+  const activeProfileId = useAppStore((s) => s.activeProfileId);
+  const toggleTaskDone = useAppStore((s) => s.toggleTaskDone);
+  const setView = useAppStore((s) => s.setView);
+  const today = ymd(new Date());
+  const taskRows = useMemo<Row[]>(
+    () =>
+      tasks
+        .filter(
+          (t) =>
+            !t.done &&
+            t.profileId === activeProfileId &&
+            t.dueTime &&
+            t.due?.slice(0, 10) === today
+        )
+        .map((t) => {
+          const [h, m] = t.dueTime!.split(':').map(Number);
+          return { kind: 'task', id: t.id, title: t.title, when: t.dueTime!, startMin: h * 60 + m };
+        }),
+    [tasks, activeProfileId, today]
+  );
+
+  // 終日イベントはまとめて上にコンパクト表示、時刻つき予定（とタスク）は下に時間順で表示
   const allDayItems = items.filter((e) => e.startMin < 0);
-  const timedItems = items.filter((e) => e.startMin >= 0);
+  const timedRows: Row[] = [
+    ...items
+      .filter((e) => e.startMin >= 0)
+      .map((e, i) => ({ kind: 'event' as const, id: `e${i}`, ...e })),
+    ...taskRows,
+  ].sort((a, b) => a.startMin - b.startMin);
 
   const request = useCallback(() => {
     setRefreshing(true);
@@ -45,7 +84,7 @@ export function CalendarCard() {
   }, [request]);
 
   // まだ一度もカレンダーを開いておらず予定が取れていないときは、案内だけ出す
-  if (items.length === 0) {
+  if (items.length === 0 && taskRows.length === 0) {
     return (
       <div className="section">
         <div className="cal-head">
@@ -113,22 +152,39 @@ export function CalendarCard() {
         </div>
       )}
 
-      {timedItems.length > 0 && (
+      {timedRows.length > 0 && (
         <div className="card">
-          {timedItems.map((e, i) => (
-            <div className="list-row" key={e.title + i}>
-              <FiCalendar
-                size={16}
-                style={{ color: 'var(--accent)', flexShrink: 0 }}
-              />
-              <div className="grow">
-                <div className="row-title">{e.title}</div>
+          {timedRows.map((e) =>
+            e.kind === 'task' ? (
+              <div className="list-row cal-task-row" key={e.id}>
+                <button
+                  className="check-circle"
+                  title="タスクを完了"
+                  onClick={() => toggleTaskDone(e.id)}
+                />
+                <div className="grow" style={{ cursor: 'pointer' }} onClick={() => setView('tasks')}>
+                  <div className="row-title">{e.title}</div>
+                  <div className="row-sub">タスク</div>
+                </div>
+                <span className="muted" style={{ flexShrink: 0 }}>
+                  {e.when}
+                </span>
               </div>
-              <span className="muted" style={{ flexShrink: 0 }}>
-                {e.when}
-              </span>
-            </div>
-          ))}
+            ) : (
+              <div className="list-row" key={e.id}>
+                <FiCalendar
+                  size={16}
+                  style={{ color: 'var(--accent)', flexShrink: 0 }}
+                />
+                <div className="grow">
+                  <div className="row-title">{e.title}</div>
+                </div>
+                <span className="muted" style={{ flexShrink: 0 }}>
+                  {e.when}
+                </span>
+              </div>
+            )
+          )}
         </div>
       )}
     </div>

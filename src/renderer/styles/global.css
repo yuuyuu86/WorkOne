@@ -2723,3 +2723,11 @@ body:has(.tray) #root {
   color: var(--text);
   font-size: 13px;
 }
+
+/* 今日の予定に並ぶ時刻つきタスク */
+.cal-task-row .check-circle {
+  margin: 0 -1px;
+}
+.cal-task-row .row-sub {
+  font-size: 11.5px;
+}
