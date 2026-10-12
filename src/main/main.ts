@@ -9,6 +9,7 @@ import {
   Tray,
   Menu,
   nativeImage,
+  screen,
 } from 'electron';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -56,6 +57,8 @@ try {
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
+// メニューバーのミニ版（トレイアイコンから開く小さなウィンドウ）
+let trayWindow: BrowserWindow | null = null;
 let isQuitting = false;
 
 // --- ウィンドウのサイズ・位置を記憶する ---
@@ -777,6 +780,8 @@ ipcMain.handle('reverse-geocode', async (_event, lat: number, lon: number) => {
 ipcMain.handle('set-badge', (_event, count: number) => {
   const n = Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
   app.setBadgeCount(n);
+  // メニューバーのアイコンの横にも未読数を出す
+  tray?.setTitle(n > 0 ? String(n) : '');
   return true;
 });
 
@@ -797,21 +802,91 @@ function createTray() {
   }
   tray = new Tray(image.isEmpty() ? nativeImage.createEmpty() : image);
   tray.setToolTip('WorkOne');
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
-      { label: 'WorkOne を開く', click: () => showMainWindow() },
-      { type: 'separator' },
-      {
-        label: '終了',
-        click: () => {
-          isQuitting = true;
-          app.quit();
-        },
+  const menu = Menu.buildFromTemplate([
+    { label: 'WorkOne を開く', click: () => showMainWindow() },
+    { type: 'separator' },
+    {
+      label: '終了',
+      click: () => {
+        isQuitting = true;
+        app.quit();
       },
-    ])
-  );
-  tray.on('click', () => showMainWindow());
+    },
+  ]);
+  // 左クリック: ミニ版を開閉 / 右クリック: メニュー
+  // （setContextMenu を使うと macOS では左クリックでもメニューが出てしまうため使わない）
+  tray.on('click', () => toggleTrayWindow());
+  tray.on('right-click', () => tray?.popUpContextMenu(menu));
 }
+
+function createTrayWindow(): BrowserWindow {
+  const win = new BrowserWindow({
+    width: 340,
+    height: 460,
+    show: false,
+    frame: false,
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    ...(process.platform === 'darwin'
+      ? { vibrancy: 'popover' as const, visualEffectState: 'active' as const, transparent: true }
+      : {}),
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.mjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+    },
+  });
+  win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  // 他をクリックしたら閉じる（メニューバーのポップオーバーと同じ振る舞い）
+  win.on('blur', () => {
+    if (!win.webContents.isDevToolsOpened()) win.hide();
+  });
+  win.on('closed', () => {
+    trayWindow = null;
+  });
+  if (VITE_DEV_SERVER_URL) win.loadURL(`${VITE_DEV_SERVER_URL}#tray`);
+  else win.loadFile(path.join(RENDERER_DIST, 'index.html'), { hash: 'tray' });
+  return win;
+}
+
+function toggleTrayWindow() {
+  if (!tray) return;
+  if (trayWindow && !trayWindow.isDestroyed() && trayWindow.isVisible()) {
+    trayWindow.hide();
+    return;
+  }
+  if (!trayWindow || trayWindow.isDestroyed()) trayWindow = createTrayWindow();
+  // トレイアイコンの真下（画面からはみ出さないように）に出す
+  const tb = tray.getBounds();
+  const wb = trayWindow.getBounds();
+  const display = screen.getDisplayNearestPoint({ x: tb.x, y: tb.y }).workArea;
+  const x = Math.round(
+    Math.min(Math.max(tb.x + tb.width / 2 - wb.width / 2, display.x + 8), display.x + display.width - wb.width - 8)
+  );
+  const y = process.platform === 'darwin' ? Math.round(tb.y + tb.height + 4) : Math.round(tb.y - wb.height - 4);
+  trayWindow.setPosition(x, y, false);
+  trayWindow.show();
+  trayWindow.focus();
+  trayWindow.webContents.send('tray:shown');
+}
+
+// ミニ版から本体の画面を開く（Inbox / タスク / サービスなど）
+ipcMain.handle('tray-open', (_event, target: unknown) => {
+  trayWindow?.hide();
+  showMainWindow();
+  const t = (target ?? {}) as { view?: string; serviceId?: string };
+  mainWindow?.webContents.send('tray:navigate', {
+    view: typeof t.view === 'string' ? t.view : undefined,
+    serviceId: typeof t.serviceId === 'string' ? t.serviceId : undefined,
+  });
+  return true;
+});
 
 // アプリメニュー（コピペ等の標準ショートカット + 独自ショートカット）
 function buildAppMenu() {

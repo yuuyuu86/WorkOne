@@ -126,6 +126,28 @@ export default function App() {
     return () => clearInterval(t);
   }, [profileAutoSwitch]);
 
+  // メニューバーのミニ版で変更したタスクなどを反映し、ミニ版からの「画面を開く」に応える
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'workone-store') useAppStore.persist.rehydrate();
+    };
+    window.addEventListener('storage', onStorage);
+    const off = window.workOne?.onTrayNavigate?.(({ view, serviceId }) => {
+      const st = useAppStore.getState();
+      if (serviceId && st.services.some((s) => s.id === serviceId)) {
+        const svc = st.services.find((s) => s.id === serviceId)!;
+        st.setActiveProfile(profileOf(svc));
+        st.openService(serviceId);
+      } else if (view === 'inbox' || view === 'tasks' || view === 'today') {
+        st.setView(view);
+      }
+    });
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      off?.();
+    };
+  }, []);
+
   // 新着通知の重要度スコア・AI 要約・タスク候補の抽出
   useInboxAi();
   // 時刻つきタスクのリマインダー

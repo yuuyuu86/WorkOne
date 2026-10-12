@@ -95,6 +95,22 @@ const api = {
     items: { url: string; name: string }[];
   }> => ipcRenderer.invoke('scrape-slack-workspaces', partition),
 
+  /** メニューバーのミニ版: 本体の画面を開く */
+  trayOpen: (target: { view?: string; serviceId?: string }): Promise<boolean> =>
+    ipcRenderer.invoke('tray-open', target),
+  /** メニューバーのミニ版が表示されたとき（最新の状態に更新するため） */
+  onTrayShown: (cb: () => void): (() => void) => {
+    const h = () => cb();
+    ipcRenderer.on('tray:shown', h);
+    return () => ipcRenderer.removeListener('tray:shown', h);
+  },
+  /** 本体: ミニ版から画面を開く指示を受け取る */
+  onTrayNavigate: (cb: (t: { view?: string; serviceId?: string }) => void): (() => void) => {
+    const h = (_e: unknown, t: any) => cb(t);
+    ipcRenderer.on('tray:navigate', h);
+    return () => ipcRenderer.removeListener('tray:navigate', h);
+  },
+
   /** 自動アップデート: 状態を購読（戻り値で解除） */
   onUpdateStatus: (
     cb: (s: { state: 'available' | 'downloading' | 'ready' | 'error'; version?: string; percent?: number }) => void
