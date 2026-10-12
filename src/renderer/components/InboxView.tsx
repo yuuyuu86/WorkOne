@@ -7,7 +7,6 @@ import {
   FiStar,
   FiClock,
   FiCheckSquare,
-  FiBookmark,
   FiCpu,
   FiRotateCcw,
   FiX,
@@ -86,7 +85,6 @@ export function InboxView({ onOpenAdd }: Props) {
   const setNotificationMeta = useAppStore((s) => s.setNotificationMeta);
   const removeNotification = useAppStore((s) => s.removeNotification);
   const clearNotifications = useAppStore((s) => s.clearNotifications);
-  const addReadLater = useAppStore((s) => s.addReadLater);
 
   const [filter, setFilter] = useState<Filter>('open');
   const [sort, setSort] = useState<Sort>('priority');
@@ -156,18 +154,8 @@ export function InboxView({ onOpenAdd }: Props) {
     }
   };
 
-  const toReadLater = (n: AppNotification) => {
-    const svc = services.find((s) => s.id === n.serviceId);
-    addReadLater({
-      title: n.title,
-      url: useAppStore.getState().serviceUrls[n.serviceId] ?? svc?.url ?? '',
-      serviceName: n.serviceName,
-      note: n.body,
-    });
-    markNotificationDone(n.id);
-  };
 
-  // キーボード操作: j/k 移動, Enter 開く, e 完了, s スヌーズ, t タスク化, l あとで見る, # 削除
+  // キーボード操作: j/k 移動, Enter 開く, e 完了, s スヌーズ, t タスク化, # 削除
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = document.activeElement as HTMLElement | null;
@@ -195,9 +183,6 @@ export function InboxView({ onOpenAdd }: Props) {
           break;
         case 't':
           if (n) setTaskFor(n);
-          break;
-        case 'l':
-          if (n) toReadLater(n);
           break;
         case '#':
           if (n) removeNotification(n.id);
@@ -329,9 +314,6 @@ export function InboxView({ onOpenAdd }: Props) {
             <button className="icon-btn" title="タスクに追加 (t)" onClick={() => setTaskFor(n)}>
               <FiCheckSquare size={14} />
             </button>
-            <button className="icon-btn" title="あとで見る (l)" onClick={() => toReadLater(n)}>
-              <FiBookmark size={14} />
-            </button>
           </>
         )}
         <button className="icon-btn" title="通知を削除 (#)" onClick={() => removeNotification(n.id)}>
@@ -362,7 +344,7 @@ export function InboxView({ onOpenAdd }: Props) {
         <h2>Inbox</h2>
         <p>
           各サービスの通知をまとめ、重要度順に並べます。<kbd>j</kbd>/<kbd>k</kbd> 移動・
-          <kbd>e</kbd> 完了・<kbd>s</kbd> スヌーズ・<kbd>t</kbd> タスク化・<kbd>l</kbd> あとで見る
+          <kbd>e</kbd> 完了・<kbd>s</kbd> スヌーズ・<kbd>t</kbd> タスク化
         </p>
       </div>
 

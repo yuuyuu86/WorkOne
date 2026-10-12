@@ -24,8 +24,7 @@ const GROUPS: { title: string; items: [string, string][] }[] = [
     items: [
       ['Home', `${MOD} + 1`],
       ['Inbox', `${MOD} + 2`],
-      ['あとで見る', `${MOD} + 3`],
-      ['タスク', `${MOD} + 4`],
+      ['タスク', `${MOD} + 3`],
       ['プロファイル 1〜9 に切り替え', 'Ctrl + 1〜9'],
       ['次のサービス', `${MOD} + Shift + ]`],
       ['前のサービス', `${MOD} + Shift + [`],
@@ -39,7 +38,6 @@ const GROUPS: { title: string; items: [string, string][] }[] = [
       ['完了', 'E'],
       ['スヌーズ（続けて 1〜4 で時間を選択）', 'S'],
       ['タスク化', 'T'],
-      ['あとで見る', 'L'],
       ['削除', '#'],
     ],
   },

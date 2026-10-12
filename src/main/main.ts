@@ -9,7 +9,6 @@ import {
   Tray,
   Menu,
   nativeImage,
-  webContents,
 } from 'electron';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -556,22 +555,6 @@ ipcMain.handle('ai-digest', async (_event, items: unknown) => {
   return { ok: !!r.ok, text: typeof r.text === 'string' ? r.text : '' };
 });
 
-// webview ごとのメモリ使用量（設定画面のパフォーマンス表示用）
-ipcMain.handle('webview-memory', (_event, pairs: unknown) => {
-  const list = Array.isArray(pairs) ? pairs : [];
-  const byPid = new Map(
-    app.getAppMetrics().map((m) => [m.pid, m.memory.workingSetSize] as const)
-  );
-  const out: { id: string; mb: number }[] = [];
-  for (const p of list as { id: string; wcId: number }[]) {
-    const wc = webContents.fromId(Number(p?.wcId));
-    if (!wc || wc.isDestroyed()) continue;
-    const kb = byPid.get(wc.getOSProcessId());
-    if (kb !== undefined) out.push({ id: String(p.id), mb: Math.round(kb / 1024) });
-  }
-  return out;
-});
-
 // 現在のアプリバージョン
 ipcMain.handle('app-version', () => app.getVersion());
 
@@ -945,13 +928,8 @@ function buildAppMenu() {
           click: () => send('menu:view-inbox'),
         },
         {
-          label: 'あとで見る',
-          accelerator: 'CmdOrCtrl+3',
-          click: () => send('menu:view-readlater'),
-        },
-        {
           label: 'タスク',
-          accelerator: 'CmdOrCtrl+4',
+          accelerator: 'CmdOrCtrl+3',
           click: () => send('menu:view-tasks'),
         },
         { type: 'separator' },

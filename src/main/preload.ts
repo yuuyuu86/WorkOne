@@ -62,7 +62,6 @@ const api = {
       'menu:zoom-reset',
       'menu:view-today',
       'menu:view-inbox',
-      'menu:view-readlater',
       'menu:view-tasks',
       ...Array.from({ length: 9 }, (_, i) => `menu:profile-${i + 1}`),
       'menu:next-service',
@@ -95,12 +94,6 @@ const api = {
     unavailable: boolean;
     items: { url: string; name: string }[];
   }> => ipcRenderer.invoke('scrape-slack-workspaces', partition),
-
-  /** webview ごとのメモリ使用量（MB）。pairs は serviceId と webContentsId の対応 */
-  webviewMemory: (
-    pairs: { id: string; wcId: number }[]
-  ): Promise<{ id: string; mb: number }[]> =>
-    ipcRenderer.invoke('webview-memory', pairs),
 
   /** 自動アップデート: 状態を購読（戻り値で解除） */
   onUpdateStatus: (

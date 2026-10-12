@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { FiX, FiArrowRight, FiArrowLeft, FiBell, FiShield } from 'react-icons/fi';
+import { FiX, FiArrowRight, FiArrowLeft, FiShield } from 'react-icons/fi';
 import { useAppStore } from '../store/useAppStore';
 
 type Props = {
@@ -46,67 +46,28 @@ function unionRect(selector: string): Rect | null {
 }
 
 export function TourOverlay({ onClose }: Props) {
-  const openService = useAppStore((s) => s.openService);
   const setView = useAppStore((s) => s.setView);
 
+  // 最初に覚えておけば十分な 3 つだけに絞る（細かい機能は使いながら見つけられる）
   const steps: Step[] = [
     {
-      selector: '[data-tour="services"]',
-      title: 'サービス一覧',
-      body: 'クリックでサービスを切り替えられます。ドラッグで並び替え、Slack は複数ワークスペースをまとめて1つのプルダウンに表示します。',
-      skip: () => useAppStore.getState().services.length === 0,
+      selector: '[data-tour="nav-views"]',
+      title: 'Home・Inbox・タスク',
+      body: 'Inbox には各サービスの通知が重要度順に集まります。完了・スヌーズ・タスク化で片付けましょう。気になったページはサービス画面の「あとで見る」でタスクに保存できます。',
     },
     {
-      selector: '[data-tour="add-service"]',
-      title: 'サービスを追加',
-      body: 'Gmail / Slack / Classroom などをここから追加できます。Slack は複数ワークスペースを個別に追加可能、学校ポータルなどの独自 URL も追加できます。',
+      selector: '.profile-switcher',
+      title: 'プロファイル',
+      body: '「学校」「個人」のようにプロファイルを分けると、ログインもサービスも別々になります。ここをクリックするか、サイドバーを横にスワイプして切り替えます。',
     },
     {
       selector: '[data-tour="search"]',
-      title: '検索',
-      body: '⌘K（Windows は Ctrl+K）でいつでも検索できます。サービス名や閲覧履歴から目的のページに飛べます。',
-    },
-    {
-      selector: '[data-tour="nav-views"]',
-      title: 'Home / Inbox / あとで見る',
-      body: 'Inbox には各サービスの通知が集約されます。あとで見るは、気になったページを保存しておけるリストです。',
-    },
-    {
-      selector: '[data-tour="service-toolbar"]',
-      title: 'サービスを開いたときの操作',
-      body: 'ホームボタンで最初のページに戻れます。動画だけを小窓（ピクチャーインピクチャー）にしたり、ページ全体を常に最前面の小窓に固定することもできます。',
-      beforeShow: () => {
-        const st = useAppStore.getState();
-        if (st.activeView !== 'service' && st.services.length > 0) {
-          openService(st.services[0].id);
-        }
-      },
-      skip: () => useAppStore.getState().services.length === 0,
-    },
-    {
-      title: '通知の許可について',
-      icon: <FiBell size={18} />,
-      body: '初めてサービスを開いて通知が発生すると、macOS が通知の許可を確認することがあります。許可すると新着が Inbox と OS 通知の両方に届きます。許可しなくても後から各サービスの設定で有効化できます。',
-    },
-    {
-      selector: '[data-tour="focus-mode"]',
-      title: '集中モード',
-      body: '通知を出すサービスを絞り込めます。「完全集中モード」ではサービス一覧そのものを隠せます。',
-    },
-    {
-      selector: '[data-tour="settings"]',
-      title: '設定',
-      body: 'テーマ・サイドバーの幅・通知の重要設定/ミュート・おやすみ時間・バックアップ（書き出し/読み込み）などはすべて設定にまとまっています。',
-    },
-    {
-      title: 'これで準備完了です',
+      title: '⌘K でなんでも',
       icon: <FiShield size={18} />,
       body: (
         <>
-          ログインが切れたときは画面上部に再ログインの案内が表示されます。
-          ID・パスワードやメール本文はどこにも保存・送信されません。
-          <br />
-          このツアーは <strong>?</strong> キー（ショートカット一覧）からいつでも見返せます。
+          検索・タスク追加（先頭に + ）・プロファイル切り替えは ⌘K から。ID・パスワードやメール本文は
+          どこにも保存・送信されません。このツアーは <strong>?</strong> キーからいつでも見返せます。
         </>
       ),
       beforeShow: () => setView('today'),

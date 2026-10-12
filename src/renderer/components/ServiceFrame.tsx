@@ -99,39 +99,23 @@ const CALENDAR_EXTRACT = `(() => {
 export function ServiceFrame({ service, isActive }: Props) {
   const setServiceLastUrl = useAppStore((s) => s.setServiceLastUrl);
   const setServiceBadge = useAppStore((s) => s.setServiceBadge);
-  const addReadLater = useAppStore((s) => s.addReadLater);
+  const addTask = useAppStore((s) => s.addTask);
   const addNotification = useAppStore((s) => s.addNotification);
   const addHistory = useAppStore((s) => s.addHistory);
   const navTarget = useAppStore((s) => s.navTarget);
-  const focusMode = useAppStore((s) => s.focusMode);
-  const focusServiceIds = useAppStore((s) => s.focusServiceIds);
   const isMutedService = useAppStore((s) => s.mutedServices.includes(service.id));
   const isImportantService = useAppStore((s) =>
     s.importantServices.includes(service.id)
   );
   const dndActive = useAppStore((s) => s.dndActive);
 
-  // このサービスの通知を抑制するか。
-  // おやすみ時間 > 明示ミュート > 重要(集中でも通知) > 集中モードの抑制
-  const focusMuted =
-    focusMode === 'deep'
-      ? true
-      : focusMode === 'focus'
-      ? !focusServiceIds.includes(service.id)
-      : false;
-  const muted = dndActive
-    ? true
-    : isMutedService
-    ? true
-    : isImportantService
-    ? false
-    : focusMuted;
+  // このサービスの通知を抑制するか（おやすみ時間中は重要サービスだけ通す）
+  const muted = isMutedService || (dndActive && !isImportantService);
   const mutedRef = useRef(muted);
   mutedRef.current = muted;
 
   const webviewRef = useRef<any>(null);
   const prevCountRef = useRef(0);
-  const gmailLastIdRef = useRef('');
   const currentUrlRef = useRef(service.url);
   const mountedRef = useRef(true);
   const isActiveRef = useRef(isActive);
@@ -247,12 +231,6 @@ export function ServiceFrame({ service, isActive }: Props) {
         prevCountRef.current = count;
       } else {
         setServiceBadge(service.id, count);
-        if (count > prevCountRef.current && !mutedRef.current) {
-          const st = useAppStore.getState();
-          if (st.notificationsEnabled) {
-            window.workOne.notify(service.name, '新着があります');
-          }
-        }
         prevCountRef.current = count;
       }
     };
@@ -271,7 +249,7 @@ export function ServiceFrame({ service, isActive }: Props) {
             body: (options && options.body) ? String(options.body) : ''
           }));
         } catch(e){}
-        // 集中モードで抑制中は OS 通知ポップアップを出さない（Inbox には残す）
+        // ミュート中・おやすみ時間中は OS 通知ポップアップを出さない（Inbox には残す）
         if (window.__mdockMuted) {
           return { close: function(){}, addEventListener: function(){}, removeEventListener: function(){} };
         }
@@ -425,28 +403,6 @@ export function ServiceFrame({ service, isActive }: Props) {
       });
     }
 
-    // 最新メールが変わっていれば通知（送信者・件名つき）
-    const newestId = entries[0]?.id ?? '';
-    const prevId = gmailLastIdRef.current;
-    if (
-      prevId &&
-      newestId &&
-      newestId !== prevId &&
-      count > 0 &&
-      !isActiveRef.current &&
-      !mutedRef.current
-    ) {
-      const st = useAppStore.getState();
-      if (st.notificationsEnabled) {
-        const e = entries[0];
-        const from = e.author ? e.author : service.name;
-        window.workOne.notify(
-          `${from}（${service.name}）`,
-          e.title || '新着メール'
-        );
-      }
-    }
-    if (newestId) gmailLastIdRef.current = newestId;
   }, [service.id, service.name, service.icon, setServiceBadge, addNotification]);
 
   // 定期取得（初回は 4 秒後、その後 60 秒間隔）
@@ -550,7 +506,7 @@ export function ServiceFrame({ service, isActive }: Props) {
     if (isGmail && isActive) pollGmail();
   }, [isGmail, isActive, pollGmail]);
 
-  // 集中モードの抑制状態を webview にも反映（Notification ラッパーが参照する）。
+  // 通知の抑制状態を webview にも反映（Notification ラッパーが参照する）。
   // webview が dom-ready 前だと executeJavaScript は同期例外を投げるため try/catch で保護。
   useEffect(() => {
     const wv = webviewRef.current;
@@ -647,11 +603,14 @@ export function ServiceFrame({ service, isActive }: Props) {
     }
   };
 
+  // 表示中のページを「あとで見る」としてタスクに保存（期限なし）
   const handleSaveReadLater = () => {
-    addReadLater({
+    addTask({
       title: currentTitle || service.name,
       url: currentUrl || service.url,
-      serviceName: service.name,
+      serviceId: service.id,
+      source: 'page',
+      profileId: service.profileId ?? 'default',
     });
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -767,7 +726,6 @@ export function ServiceFrame({ service, isActive }: Props) {
           ref={webviewRef}
           src={initialSrc}
           partition={partitionFor(service.profileId)}
-          data-service-id={service.id}
           useragent={CHROME_USER_AGENT}
           // Calendar だけ、裏でも描画を止めない（時刻つき予定の読み取りに必要）。
           // 他サービスまで常時フル稼働にするとメモリ/CPU負荷が増え、レンダラーが

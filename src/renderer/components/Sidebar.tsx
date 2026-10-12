@@ -2,10 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import {
   FiHome,
   FiInbox,
-  FiBookmark,
-  FiGrid,
-  FiTarget,
-  FiMoon,
   FiPlus,
   FiSettings,
   FiSearch,
@@ -52,9 +48,6 @@ export function Sidebar({
     (s) =>
       s.tasks.filter((t) => !t.done && t.profileId === s.activeProfileId).length
   );
-  const focusMode = useAppStore((s) => s.focusMode);
-  const focusServiceIds = useAppStore((s) => s.focusServiceIds);
-  const readLater = useAppStore((s) => s.readLater);
   const setView = useAppStore((s) => s.setView);
   const openService = useAppStore((s) => s.openService);
   const reorderServices = useAppStore((s) => s.reorderServices);
@@ -66,10 +59,10 @@ export function Sidebar({
     (s) => s.notifications.filter((n) => !n.read && !n.done && !n.snoozedUntil).length
   );
 
-  // ドラッグ並び替え（通常モードのみ。集中モードは表示が絞られるため無効）。
+  // ドラッグ並び替え。
   // id ベースで扱う（グループ表示でも崩れないように）。
   const [dragId, setDragId] = useState<string | null>(null);
-  const canReorder = focusMode === 'normal';
+  const canReorder = true;
 
   // プロファイル切り替え時に、Arc のように中身を横にスライドさせる
   const activeProfileId = useAppStore((s) => s.activeProfileId);
@@ -158,14 +151,6 @@ export function Sidebar({
     }
     setDragId(null);
   };
-
-  // 集中モードに応じて表示するサービスを絞る
-  let visibleServices = services;
-  if (focusMode === 'focus') {
-    visibleServices = services.filter((s) => focusServiceIds.includes(s.id));
-  } else if (focusMode === 'deep') {
-    visibleServices = []; // 完全集中モードはサービス一覧を隠す
-  }
 
   // Slack のワークスペースか（host が slack.com 系）
   const isSlackService = (s: Service) => {
@@ -261,7 +246,7 @@ export function Sidebar({
   // カテゴリ別グループ（該当サービスがあるカテゴリのみ見出しを出す）
   const renderGrouped = () =>
     CATEGORY_ORDER.map((cat) => {
-      const items = visibleServices.filter((s) => s.category === cat);
+      const items = services.filter((s) => s.category === cat);
       if (items.length === 0) return null;
       const collapsed = collapsedCategories.includes(cat);
       const unread = items.reduce(
@@ -347,44 +332,18 @@ export function Sidebar({
           <FiCheckSquare size={16} />,
           tasksOpen ? String(tasksOpen) : undefined
         )}
-        {navItem(
-          'readLater',
-          'あとで見る',
-          <FiBookmark size={16} />,
-          readLater.length ? String(readLater.length) : undefined
-        )}
-      </div>
-      <div data-tour="focus-mode">
-        {navItem(
-          'focus',
-          '集中モード',
-          focusMode === 'deep' ? (
-            <FiMoon size={16} />
-          ) : focusMode === 'focus' ? (
-            <FiTarget size={16} />
-          ) : (
-            <FiGrid size={16} />
-          ),
-          focusMode !== 'normal' ? 'ON' : undefined
-        )}
       </div>
 
       <div className="sidebar-section-label">マイサービス</div>
       <div data-tour="services">
-        {focusMode === 'deep' ? (
+        {services.length === 0 ? (
           <div className="sidebar-empty">
-            完全集中モード中はサービス一覧を非表示にしています。
-          </div>
-        ) : visibleServices.length === 0 ? (
-          <div className="sidebar-empty">
-            {services.length === 0
-              ? '「サービスを追加」からGmailやSlackなどを追加できます。'
-              : '集中モードで表示するサービスが選択されていません。'}
+            「サービスを追加」からGmailやSlackなどを追加できます。
           </div>
         ) : sidebarGrouped ? (
           renderGrouped()
         ) : (
-          renderServiceList(visibleServices)
+          renderServiceList(services)
         )}
       </div>
 

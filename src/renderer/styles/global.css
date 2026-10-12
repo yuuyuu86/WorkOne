@@ -1621,31 +1621,6 @@ textarea {
   margin-top: 2px;
 }
 
-/* ---------- 集中モード セグメント ---------- */
-.segmented {
-  display: inline-flex;
-  background: var(--hover);
-  border-radius: 10px;
-  padding: 3px;
-  gap: 3px;
-}
-
-.segmented button {
-  border: none;
-  background: transparent;
-  padding: 7px 16px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-secondary);
-}
-
-.segmented button.active {
-  background: var(--panel-bg);
-  color: var(--text);
-  box-shadow: var(--shadow);
-}
-
 /* ---------- チェック行 ---------- */
 .check-row {
   display: flex;
@@ -2095,30 +2070,6 @@ kbd {
   font-size: 12px;
   max-width: 120px;
 }
-.mem-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 12.5px;
-  padding: 3px 0;
-}
-.mem-bar {
-  width: 120px;
-  height: 6px;
-  border-radius: 3px;
-  background: var(--hover);
-  overflow: hidden;
-}
-.mem-bar span {
-  display: block;
-  height: 100%;
-  background: var(--accent);
-}
-.mem-mb {
-  width: 64px;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
 
 /* ---------- 共通（v2） ---------- */
 .btn-primary[disabled] {
@@ -2322,7 +2273,7 @@ kbd {
 .task-toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 10px;
   flex-wrap: wrap;
   margin: 14px 0 18px;

@@ -4,8 +4,6 @@ import { ServiceWebviews } from './components/ServiceWebviews';
 import { TodayView } from './components/TodayView';
 import { InboxView } from './components/InboxView';
 import { TasksView } from './components/TasksView';
-import { ReadLaterView } from './components/ReadLaterView';
-import { FocusModeView } from './components/FocusModeView';
 import { SettingsView } from './components/SettingsView';
 import { AddServiceModal } from './components/AddServiceModal';
 import { CommandPalette } from './components/CommandPalette';
@@ -160,9 +158,6 @@ export default function App() {
         case 'view-inbox':
           store.setView('inbox');
           break;
-        case 'view-readlater':
-          store.setView('readLater');
-          break;
         case 'view-tasks':
           store.setView('tasks');
           break;
@@ -221,10 +216,6 @@ export default function App() {
         return <InboxView onOpenAdd={() => setShowAdd(true)} />;
       case 'tasks':
         return <TasksView />;
-      case 'readLater':
-        return <ReadLaterView />;
-      case 'focus':
-        return <FocusModeView />;
       case 'settings':
         return <SettingsView />;
       default:
