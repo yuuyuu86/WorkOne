@@ -157,6 +157,14 @@ export function TodayView({ onOpenAdd }: Props) {
     });
   const hasClassroom = hasServiceHost('classroom.google.com');
   const hasCalendar = hasServiceHost('calendar.google.com');
+  const activeProfileId = useAppStore((s) => s.activeProfileId);
+  const hasTimedTaskToday = useAppStore((s) => {
+    const d = new Date();
+    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return s.tasks.some(
+      (t) => !t.done && t.profileId === activeProfileId && !!t.dueTime && t.due?.slice(0, 10) === today
+    );
+  });
 
   // 小ネタ: 深夜の一言 / 平日に課題が無いときの労いコピー（優先度: 深夜 > 課題なし）
   const dateKey = now.toLocaleDateString('ja-JP');
@@ -201,7 +209,8 @@ export function TodayView({ onOpenAdd }: Props) {
       case 'notifications':
         return notifications.some((n) => !n.done && !n.snoozedUntil);
       case 'calendar':
-        return hasCalendar;
+        // カレンダー未追加でも、今日の時刻つきタスクがあれば表示する
+        return hasCalendar || hasTimedTaskToday;
       case 'classroom':
         return hasClassroom;
       default:
